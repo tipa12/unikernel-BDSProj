@@ -13,3 +13,16 @@ The build process uses the [Scripts](https://github.com/unikraft-upb/scripts)
 6. run `./do-httpreply run` to start the unikernel. This will also create the necessary networking
 7. test the unikernel with `echo "PING" | nc 172.44.0.2 8123`
 
+## Setup
+
+Build the image: `docker build --build-arg GITHUB_TOKEN=<token> -t bdspro .`
+
+Run the image: `docker run -it --rm bdspro`
+
+Run the image with this directory mounted: `docker run -it --rm -v $(pwd):/usr/src/unikraft/apps/app-bdspro bdspro`
+
+Build the unikernel using Kraftkit:
+
+   1. Navigate to the unikernel source directory
+   2. Build the application: `kraft build`
+   3. Run the application: `kraft run`

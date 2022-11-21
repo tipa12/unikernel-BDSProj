@@ -24,6 +24,7 @@
 *.pyc
 !.gitignore
 .*
+!.dockerignore
 /a.out
 
 # gnu global files
