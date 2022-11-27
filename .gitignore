@@ -26,6 +26,7 @@
 .*
 !.dockerignore
 /a.out
+/app-bdspro/build
 
 # gnu global files
 GPATH

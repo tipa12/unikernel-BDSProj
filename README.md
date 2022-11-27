@@ -19,7 +19,7 @@ Build the image: `docker build --build-arg GITHUB_TOKEN=<token> -t bdspro .`
 
 Run the image: `docker run -it --rm bdspro`
 
-Run the image with this directory mounted: `docker run -it --rm -v $(pwd):/usr/src/unikraft/apps/app-bdspro bdspro`
+Run the image with this directory mounted: `docker run -it --rm -v $(pwd)/app-bdspro:/usr/src/unikraft/apps/app-bdspro bdspro`
 
 Build the unikernel using Kraftkit:
 
