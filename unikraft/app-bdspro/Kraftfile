@@ -1,0 +1,12 @@
+specification: v0.5
+
+unikraft: stable
+
+libraries:
+  musl: stable
+  lwip: stable
+
+targets:
+  - name: default
+    architecture: x86_64
+    platform: linuxu

@@ -1,10 +1,10 @@
 /build
 /doc/build
-/.auto.deps
-/.config.cmd
-/.config.old
-/..config.tmp
-/.config
+*.auto.deps
+*.config.cmd
+*.config.old
+*..config.tmp
+*.config
 *.depend
 *.o
 *.a
@@ -23,10 +23,10 @@
 .\#_*
 *.pyc
 !.gitignore
-.*
 !.dockerignore
 /a.out
-/app-bdspro/build
+*/app-bdspro/build
+*.unikraft
 
 # gnu global files
 GPATH
