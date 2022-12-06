@@ -37,3 +37,10 @@ GTAGS
 # cscope files
 cscope.*
 ncscope.*
+
+# MirageOS
+
+MirageOS/_build
+MirageOS/dist
+MirageOS/duniverse
+MirageOS/mirage
