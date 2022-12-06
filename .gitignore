@@ -44,3 +44,9 @@ MirageOS/_build
 MirageOS/dist
 MirageOS/duniverse
 MirageOS/mirage
+
+
+# Testbench
+
+Testbench/venv
+Testbench/unikernel.log
