@@ -37,3 +37,5 @@ GTAGS
 # cscope files
 cscope.*
 ncscope.*
+
+# test trigger by changing gitignore
