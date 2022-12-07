@@ -1,11 +1,5 @@
-# MirageOS Unikernel
+# MirageOS
 
-## Hello setup
+## Docker setup
 
-1. Configure `mirage configure -t unix`
-2. Install external dependencies `make depends`
-3. Build using `make`
-4. Run the application `./dist/test-operator`
-
-
-
+Build this image using `docker build --progress plain -t bdspro-mirageos .`

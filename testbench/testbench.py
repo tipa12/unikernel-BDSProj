@@ -73,7 +73,7 @@ if __name__ == '__main__':
     loop.create_task(tuple_generator_server(sleep_duration_in_seconds=None))
 
     # Boot Time
-    sw = StopWatchUDP("../MirageOS/dist/test-operator")
+    sw = StopWatchUDP("../MirageOS/test-operator/dist/test-operator")
     t = loop.create_datagram_endpoint(lambda: sw, local_addr=('0.0.0.0', 8080))
     loop.create_task(sw.launch_unikernel())
     loop.run_until_complete(t)
