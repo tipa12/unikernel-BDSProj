@@ -1,0 +1,14 @@
+gcloud compute instances create testbench \
+    --project=bdspro \
+    --zone=europe-west1-b \
+    --machine-type=e2-micro \
+    --network-interface=network-tier=PREMIUM,private-network-ip=10.132.0.15,subnet=default \
+    --maintenance-policy=MIGRATE \
+    --provisioning-model=STANDARD \
+    --service-account=152414602910-compute@developer.gserviceaccount.com \
+    --scopes=https://www.googleapis.com/auth/compute,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/devstorage.read_only \
+    --create-disk=auto-delete=yes,boot=yes,device-name=testbench,image=projects/debian-cloud/global/images/debian-11-bullseye-v20221206,mode=rw,size=10,type=projects/bdspro/zones/us-central1-a/diskTypes/pd-balanced \
+    --no-shielded-secure-boot \
+    --shielded-vtpm \
+    --shielded-integrity-monitoring \
+    --reservation-affinity=any

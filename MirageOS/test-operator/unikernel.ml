@@ -37,7 +37,7 @@ module Main (S : Tcpip.Stack.V4V6) = struct
   let notifyHost s ~dst ~dst_port =
     S.UDP.write ~dst ~dst_port s (Cstruct.string "BOOTED") >>= function
     | Ok () ->
-        Logs.info (fun m -> m "Boot Package Sent");
+        Logs.info (fun m -> m "Boot Package Sent to %s" (Ipaddr.to_string dst));
         Lwt.return_unit
     | Error e ->
         Logs.err (fun m ->

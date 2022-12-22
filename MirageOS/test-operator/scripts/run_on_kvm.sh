@@ -1,0 +1,1 @@
+~/Uni/WiSe2223/DBPRO/solo5/scripts/virtio-run/solo5-virtio-run.sh -n tap100 -- dist/test-operator.virtio
