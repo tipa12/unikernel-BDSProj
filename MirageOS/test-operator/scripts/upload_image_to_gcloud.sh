@@ -12,7 +12,7 @@ make
 
 # create new image
 echo "Building the RAW image"
-~/Uni/WiSe2223/DBPRO/solo5/scripts/virtio-mkimage/solo5-virtio-mkimage.sh -f tar -d -- test_operator.tar.gz dist/test-operator.virtio --ipv4-only=true
+${SOLO5_HOME}/scripts/virtio-mkimage/solo5-virtio-mkimage.sh -f tar -d -- test_operator.tar.gz dist/test-operator.virtio --ipv4-only=true
 gsutil cp test_operator.tar.gz gs://mirage-os-binary/test_operator.tar.gz
 gcloud compute images create test-operator \
     --project=bdspro \
