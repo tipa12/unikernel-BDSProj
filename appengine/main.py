@@ -111,6 +111,8 @@ def uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId):
 def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples):
 
     datasetId = generateUniqueID()
+    # Define the bucket and object name
+    bucketName = 'datasetbucket3245'
 
     # Create a Firestore client
     db = firestore.Client()
@@ -126,13 +128,9 @@ def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elem
         "elementType": elementType,
         "elementRangeStart": elementRangeStart,
         "elementRangeEnd": elementRangeEnd,
-        "tuplesLocation": "dummy"
+        "cloudStorageBucket": bucketName,
+        "datasetFilename": datasetId + ".pkl"
     })
-
-    #fileEnd, datasetData = serializeTupleListToJson(listOftuples)
-
-    # Define the bucket and object name
-    bucketName = 'datasetbucket3245'
 
     uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId)
 
