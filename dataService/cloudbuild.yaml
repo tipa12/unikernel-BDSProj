@@ -6,10 +6,6 @@ steps:
   entrypoint: 'pip'
   args: ['install', '-r', 'requirements.txt']
 
-#- name: 'python:3.8'
-#  entrypoint: 'python'
-#  args: ['-m', 'pytest', 'tests/']
-
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'instances', 'create', 'DataService', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2004-lts', '--image-project', 'ubuntu-os-cloud']
 
