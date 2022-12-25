@@ -1,6 +1,10 @@
 steps:
 - name: 'gcr.io/cloud-builders/git'
-  args: ['clone', 'https://github.com/tipa12/unikernel-BDSProj.git']
+  args: ['clone', 'https://github.com/tipa12/unikernel-BDSProj.git', '--branch', 'tpabst_deployTupleGeneratoToComputeEngine']
+  availableSecrets:
+    secretManager:
+    - versionName: projects/bdspro/secrets/githubsecret/versions/1
+    env: '_GITHUB_TOKEN'
 
 - name: 'python:3.8'
   entrypoint: 'pip'
