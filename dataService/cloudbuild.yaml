@@ -17,9 +17,10 @@ steps:
   args: ['compute', 'scp', '--zone', 'europe-west3-a', './main.py', './tupleGenerator.py', 'DataService:~/']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'DataService', '--zone', 'europe-west3-a', '--command', 'python3 <PROGRAM_NAME>.py']
+  args: ['compute', 'ssh', 'DataService', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
 
 availableSecrets:
   - secretManager:
       name: projects/bdspro/secrets/githubsecret/versions/latest
     secretEnv: '_GITHUB_TOKEN'
+
