@@ -20,6 +20,6 @@ steps:
   args: ['compute', 'ssh', 'DataService', '--zone', 'europe-west3-a', '--command', 'python3 <PROGRAM_NAME>.py']
 
 availableSecrets:
-  secretManager:
-  - versionName: projects/bdspro/secrets/githubsecret/versions/latest
-  env: '_GITHUB_TOKEN'
+  - secretManager:
+      name: projects/bdspro/secrets/githubsecret/versions/latest
+    secretEnv: '_GITHUB_TOKEN'
