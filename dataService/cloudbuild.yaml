@@ -19,4 +19,3 @@ availableSecrets:
   - secretManager:
       name: projects/bdspro/secrets/githubsecret/versions/latest
     secretEnv: '_GITHUB_TOKEN'
-
