@@ -92,42 +92,11 @@ def serializeTupleListToJson(listOfTuples):
     return (".json", jsonData)
 
 
-def uploadTupleListToCloudStorage1(listOfTuples, bucketName, datasetId):
-    fileNameTemplate = datasetId + "_{}.json"
-    # Split the list into smaller chunks
-    chunkSize = 10000
-    numChunks = len(listOfTuples) // chunkSize
-    if len(listOfTuples) % chunkSize != 0:
-        numChunks += 1
-    for i in range(numChunks):
-        chunk = listOfTuples[i*chunkSize:(i+1)*chunkSize]
-    
-        # Convert the chunk to a JSON string
-        jsonData = json.dumps(chunk)
-
-        # Create a storage client
-        storageClient = storage.Client()
-
-        # Get a reference to the bucket
-        bucket = storageClient.bucket(bucketName)
-        # bucket = storage_client.get_bucket(bucketName)
-
-        # Create a blob from the file
-        fileName = fileNameTemplate.format(i)
-        blob = bucket.blob(datasetId + "/" + fileName)
-
-        # Upload the JSON data to the bucket
-        blob.upload_from_string(jsonData)
-
-def uploadTupleListToCloudStorage2(listOfTuples, bucketName, datasetId):
-    # Serialize the list
-    data = pickle.dumps(listOfTuples)
-
-    # Save the serialized list to a temporary file
-    import tempfile
-    with tempfile.NamedTemporaryFile() as fp:
-        fp.write(data)
-        fp.flush()
+def uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId):
+    # Writing to tmp folder
+    with open("/tmp/" + datasetId + ".pkl", "wb") as file:
+        # Serialize the list
+        pickle.dump(listOfTuples, file)
 
     # Create a storage client
     storageClient = storage.Client()
@@ -135,9 +104,8 @@ def uploadTupleListToCloudStorage2(listOfTuples, bucketName, datasetId):
     bucket = storageClient.bucket(bucketName)
     # bucket = storage_client.get_bucket(bucketName)
 
-
     blob = bucket.blob(datasetId + ".pkl")
-    blob.upload_from_filename(fp.name)
+    blob.upload_from_filename("/tmp/" + datasetId + ".pkl")
 
 
 def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples):
@@ -166,7 +134,7 @@ def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elem
     # Define the bucket and object name
     bucketName = 'datasetbucket3245'
 
-    uploadTupleListToCloudStorage2(listOfTuples, bucketName, datasetId)
+    uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId)
 
     return datasetId
 
