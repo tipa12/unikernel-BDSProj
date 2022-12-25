@@ -1,10 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/git'
-  args: ['clone', 'https://github.com/tipa12/unikernel-BDSProj.git', '--branch', 'tpabst_deployTupleGeneratoToComputeEngine']
-  secrets:
-    secretManager:
-    - versionName: projects/bdspro/secrets/githubsecret/versions/1
-    env: '_GITHUB_TOKEN'
+  args: ['clone', 'https://<TOKEN>@github.com/tipa12/unikernel-BDSProj.git', '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
 
 - name: 'python:3.8'
   entrypoint: 'pip'
@@ -22,3 +18,8 @@ steps:
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'ssh', 'DataService', '--zone', 'europe-west3-a', '--command', 'python3 <PROGRAM_NAME>.py']
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/bdspro/secrets/githubsecret/versions/latest
+  env: '_GITHUB_TOKEN'
