@@ -6,7 +6,6 @@ from google.cloud import storage
 import uuid
 import datetime
 import pickle
-import json
 
 app = Flask(__name__)
 
@@ -14,89 +13,29 @@ app = Flask(__name__)
 def root():
     return 'Please give an argument to the URL.'
 
-def oldWriteToFirestore():
-
-    datasetId = generateUniqueID()
-
-    # Create a Firestore client
-    db = firestore.Client()
-
-    # Create a new document in the "datasets" collection
-    doc_ref = db.collection("datasets").document(datasetId)
-
-    listOftuples = []
-
-    ######################################
-    tuplesCollection = db.collection("datasets").document(datasetId).collection("tuples")
-
-    # Set the batch size
-    batch_size = 500
-
-    # Initialize the counter
-    counter = 0
-
-    batch = db.batch()
-
-    # Loop through the documents
-    for index, tuple in enumerate(listOftuples):
-        tupleDict = tupleToDict(tuple)
-        docRef = tuplesCollection.document(str(index))
-        batch.set(docRef, tupleDict)
-
-        # Increment the counter
-        counter += 1
-    
-        # If the batch size is reached, add the documents to the collection in a batch
-        if counter == batch_size:
-            # Commit the batch and reset batch
-            batch.commit()
-            batch = db.batch()
-            # Reset the counter
-            counter = 0
-
-    batch.commit()
-
 def generateUniqueID():
     # Generate a unique ID
-    unique_id = str(uuid.uuid4())
+    uniqueId = str(uuid.uuid4())
 
     # Get the current date and time
     now = datetime.datetime.now()
 
     # Format the date and time as a string
-    date_time_str = now.strftime("%Y%m%d%H%M%S")
+    dateTimeStr = now.strftime("%Y%m%d%H%M%S")
 
     # Concatenate the unique ID and the date/time string
-    unique_id_with_date_time = date_time_str + "-" + unique_id
+    uniqueIdWithDateTime = dateTimeStr + "-" + uniqueId
 
-    return unique_id_with_date_time
+    return uniqueIdWithDateTime
 
 def tupleToDict(tuple):
     return {str(i): val for i, val in enumerate(tuple)}
 
-def serializeTupleListToPickle(listOfTuples):
-    # Pickle the list
-    pickledData = pickle.dumps(listOfTuples)
-    return (".pkl", pickledData)
-
-    # Open the file in read mode
-    #with open('my_list.pkl', 'rb') as f:
-        # Load the list from the file
-    #    my_list = pickle.load(f)
-
-    #print(my_list)  # Output: [(1,9,3),(6,4,1),(9,3,5),(6,4,3)]
-
-def serializeTupleListToJson(listOfTuples):
-    # Convert the list to a JSON string
-    jsonData = json.dumps(listOfTuples)
-    return (".json", jsonData)
-
-
-def uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId):
+def uploadObjectToCloudStorage(object, bucketName, uniqueFilename):
     # Writing to tmp folder
-    with open("/tmp/" + datasetId + ".pkl", "wb") as file:
+    with open("/tmp/" + uniqueFilename + ".pkl", "wb") as file:
         # Serialize the list
-        pickle.dump(listOfTuples, file)
+        pickle.dump(object, file)
 
     # Create a storage client
     storageClient = storage.Client()
@@ -104,11 +43,11 @@ def uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId):
     bucket = storageClient.bucket(bucketName)
     # bucket = storage_client.get_bucket(bucketName)
 
-    blob = bucket.blob(datasetId + ".pkl")
-    blob.upload_from_filename("/tmp/" + datasetId + ".pkl")
+    blob = bucket.blob(uniqueFilename + ".pkl")
+    blob.upload_from_filename("/tmp/" + uniqueFilename + ".pkl")
 
 
-def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples):
+def writeDatasetToFirestoreAndCloudStorage(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples, unikernelFunction):
 
     datasetId = generateUniqueID()
     # Define the bucket and object name
@@ -129,28 +68,77 @@ def writeDatasetToDatabase(name, sizeOfTuples, numberOfTuples, elementType, elem
         "elementRangeStart": elementRangeStart,
         "elementRangeEnd": elementRangeEnd,
         "cloudStorageBucket": bucketName,
-        "datasetFilename": datasetId + ".pkl"
+        "datasetFilename": datasetId + ".pkl",
+        "datasetId": datasetId,
+        "dateCreated": datetime.datetime.now(),
+        "unikernelFunction": unikernelFunction
     })
 
-    uploadTupleListToCloudStorage(listOfTuples, bucketName, datasetId)
+def downloadDataset(datasetId):
+    # Set up the Cloud Storage client
+    client = storage.Client()
 
-    return datasetId
+    # Set the name of the bucket and the file to download
+    bucketName = "datasetbucket3245"
+    fileName = datasetId + ".pkl"
+
+    # Use the client to download the file
+    bucket = client.bucket(bucketName)
+    blob = bucket.blob(fileName)
+    file = blob.download_as_string()
+
+    # Deserialize the data from the file
+    data = pickle.loads(file)
+
+    return data
+
+def evaluateDataset(datasetId, unikernelFunction):
+    data = downloadDataset(datasetId)
+    acceptedTuples = 0
+    rejectedTuples = 0
+
+    if unikernelFunction == 'filter':
+        for tuple in data:
+            if tuple[0] > 0:
+                acceptedTuples += 1
+            else:
+                rejectedTuples += 1
+
+    # Create a Firestore client
+    db = firestore.Client()
+
+    # Create a new document in the "datasets" collection
+    doc_ref = db.collection("datasets").document(datasetId)
+
+    # Set the capital field
+    doc_ref.update({
+        'acceptedTuples': acceptedTuples,
+        'rejectedTuples': rejectedTuples
+        })
 
 
 @app.route('/generateDataset')
-def generateDataset():
+def generateDatasetEndpoint():
     # set parameters/arguments
     sizeOfTuples = int(request.args.get('sizeOfTuples'))
     numberOfTuples = int(request.args.get('numberOfTuples'))
     elementType = request.args.get('elementType')
     elementRangeStart = int(request.args.get('elementRangeStart'))
     elementRangeEnd = int(request.args.get('elementRangeEnd'))
+    unikernelFunction = request.args.get('unikernelFunction')
 
     # generate tuples
     listOfTuples = generate_tuples(sizeOfTuples, numberOfTuples, elementType, (elementRangeStart, elementRangeEnd))
-    datasetId = writeDatasetToDatabase("default", sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples)
+    datasetId = writeDatasetToFirestoreAndCloudStorage("default", sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples, unikernelFunction)
 
     #return tuples
+    return datasetId
+
+
+@app.route('/evaluateDataset')
+def evaluateDatasetEndpoint():
+    datasetId = request.args.get('datasetId')
+    evaluateDataset(datasetId, 'filter')
     return datasetId
     
 
