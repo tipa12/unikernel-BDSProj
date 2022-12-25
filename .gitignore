@@ -45,6 +45,12 @@ MirageOS/dist
 MirageOS/duniverse
 MirageOS/mirage
 
+# MirageOS
+
+_build
+dist
+duniverse
+
 
 # Testbench
 
