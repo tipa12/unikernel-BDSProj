@@ -1,21 +1,30 @@
 steps:
-- name: 'gcr.io/cloud-builders/git'
-  args: ['clone', 'https://${_GITHUB_TOKEN}@github.com/tipa12/unikernel-BDSProj.git', '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
-
+#- name: 'gcr.io/cloud-builders/git'
+#  args: ['clone', "https://$$GITHUB_TOKEN@github.com/tipa12/unikernel-BDSProj.git", '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
+#  secretEnv: ['GITHUB_TOKEN']
 - name: 'python:3.8'
   entrypoint: 'pip'
   args: ['install', '-r', 'requirements.txt']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'DataService', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2004-lts', '--image-project', 'ubuntu-os-cloud']
+  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'scp', '--zone', 'europe-west3-a', './main.py', './tupleGenerator.py', 'DataService:~/']
+  args: ['compute', 'scp', '--zone', 'europe-west3-a', './main.py', './tupleGenerator.py', './requirements.txt', 'dataservice:~/']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'DataService', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
 
-availableSecrets:
-  - secretManager:
-      name: projects/bdspro/secrets/githubsecret/versions/latest
-    secretEnv: '_GITHUB_TOKEN'
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+
+#availableSecrets:
+#  secretManager:
+#  - versionName: projects/bdspro/secrets/githubsecret/versions/latest
+#    env: 'GITHUB_TOKEN'
