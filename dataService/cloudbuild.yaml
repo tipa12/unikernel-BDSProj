@@ -2,9 +2,10 @@ steps:
 #- name: 'gcr.io/cloud-builders/git'
 #  args: ['clone', "https://$$GITHUB_TOKEN@github.com/tipa12/unikernel-BDSProj.git", '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
 #  secretEnv: ['GITHUB_TOKEN']
-- name: 'python:3.8'
-  entrypoint: 'pip'
-  args: ['install', '-r', 'dataService/requirements.txt']
+
+#- name: 'python:3.8'
+#  entrypoint: 'pip'
+#  args: ['install', '-r', 'dataService/requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
