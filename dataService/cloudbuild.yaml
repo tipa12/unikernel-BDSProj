@@ -12,7 +12,11 @@ steps:
   args: ['components', 'update']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud', '--force-create']
+  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
+  ignore_errors: true
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud', '--force-create']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataservice:~/']
