@@ -16,28 +16,31 @@ steps:
   args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataservice:~/']
+  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud', '--metadata-from-file', 'startup-script=dataService/start.sh']
+  args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataService/start.sh', 'dataservice:~/']
+
+- name: 'gcr.io/cloud-builders/bash'
+  args: ['pwd']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
 
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
 
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
 
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
 
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:8000 main:app']
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:8080 main:app']
 
 
 #availableSecrets:
