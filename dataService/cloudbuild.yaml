@@ -6,19 +6,11 @@ steps:
   entrypoint: 'pip'
   args: ['install', '-r', 'dataService/requirements.txt']
 
-- name: 'gcr.io/cloud-builders/bash'
-  entrypoint: bash
-  args:
-    - '-c'
-    - |
-      set -e
-      gcloud compute instances delete dataservice --zone europe-west3-a
-
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
+  args: ['compute', 'instances', 'create', 'dataservice', '--zone', 'europe-west3-a', '--machine-type', 'e2-small', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud', '--force-create']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataservice:~/']
