@@ -21,9 +21,6 @@ steps:
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataService/start.sh', 'dataservice:~/']
 
-- name: 'gcr.io/cloud-builders/bash'
-  args: ['pwd']
-
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
 
