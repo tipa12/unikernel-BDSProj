@@ -32,8 +32,12 @@ steps:
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
 
+#- name: 'gcr.io/cloud-builders/gcloud'
+#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:8000 main']
+
 
 #availableSecrets:
 #  secretManager:
