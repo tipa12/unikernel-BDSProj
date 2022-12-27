@@ -31,11 +31,11 @@ def generateUniqueID():
 def tupleToDict(tuple):
     return {str(i): val for i, val in enumerate(tuple)}
 
-def uploadObjectToCloudStorage(object, bucketName, uniqueFilename):
+def uploadObjectToCloudStorage(objectToUpload, bucketName, uniqueFilename):
     # Writing to tmp folder
     with open("/tmp/" + uniqueFilename + ".pkl", "wb") as file:
         # Serialize the list
-        pickle.dump(object, file)
+        pickle.dump(objectToUpload, file)
 
     # Create a storage client
     storageClient = storage.Client()
@@ -73,6 +73,8 @@ def writeDatasetToFirestoreAndCloudStorage(name, sizeOfTuples, numberOfTuples, e
         "dateCreated": datetime.datetime.now(),
         "unikernelFunction": unikernelFunction
     })
+    uploadObjectToCloudStorage(listOfTuples, bucketName, datasetId)
+    return datasetId
 
 def downloadDataset(datasetId):
     # Set up the Cloud Storage client
