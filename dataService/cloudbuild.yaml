@@ -16,7 +16,7 @@ steps:
   args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'dataservice', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-highmem-2', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
+  args: ['compute', 'instances', 'create', 'dataservice', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'scp', '--zone', 'europe-west3-a', 'dataService/main.py', 'dataService/tupleGenerator.py', 'dataService/requirements.txt', 'dataService/start.sh', 'dataservice:~/']
