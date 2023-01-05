@@ -4,6 +4,7 @@ import socket
 import threading
 import time
 import uuid
+import struct
 
 # from dataService.launcher.gcp_launcher import create_from_custom_image
 
@@ -59,15 +60,19 @@ def test_boot_time_gcp(image_name: str, logger: logging.Logger):
 def handle_client(client_socket, logger: logging.Logger, data, delay, iterations):
 
     # Send data to the client at an increasing rate
-    for i in range(iterations):
+    for tuple in data:
         # Construct the data as a tuple
         # data = (i, time.perf_counter())
 
+        print(tuple)
+        # pack the values into a byte string
+        packed_data = struct.pack('!5i', *tuple)
+
         # Send the data to the client
-        client_socket.send(data)
+        client_socket.send(packed_data)
 
         # Decrease the delay time - comment out to send data at a constant rate
-        # delay *= 0.9
+        delay *= 0.9
 
         if delay < 0.001:
             continue
@@ -107,7 +112,7 @@ def test_gcp(image_name: str, logger: logging.Logger, data, delay):
     tuple_throughput_test.start()
 
     # boot_time_test.join(30)
-    tuple_throughput_test.join()
+    tuple_throughput_test.join(10)
 
     #if boot_time_test.is_alive() or tuple_throughput_test.is_alive():
     #    raise ExperimentFailedException("Timeout")
