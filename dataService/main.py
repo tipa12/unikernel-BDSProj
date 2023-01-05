@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, render_template, request, jsonify
 from tupleGenerator import generate_tuples
 from google.cloud import firestore
@@ -8,6 +9,20 @@ import datetime
 import pickle
 
 app = Flask(__name__)
+
+logger = logging.getLogger("Logger")
+logger.setLevel(logging.DEBUG)
+# Create a console handler
+console_handler = logging.StreamHandler()
+# Set the console handler level to DEBUG
+console_handler.setLevel(logging.DEBUG)
+# Create a formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Set the formatter for the console handler
+console_handler.setFormatter(formatter)
+# Add the console handler to the logger
+logger.addHandler(console_handler)
+
 
 @app.route('/')
 def root():
@@ -82,6 +97,7 @@ def createFirestoreDocument(collection, documentId, setDict):
     # Set the data for the document
     docRef.set(setDict)
 
+
 def downloadDataset(datasetId):
     # Set up the Cloud Storage client
     client = storage.Client()
@@ -130,6 +146,25 @@ def evaluateDataset(datasetId, unikernelFunction):
         print("Error: Unikernel function not recognized")
 
     return acceptedTuples, rejectedTuples
+
+
+    # Set the capital field
+    doc_ref.update({
+        'acceptedTuples': acceptedTuples,
+        'rejectedTuples': rejectedTuples
+    })
+
+
+@app.route('/start/gcp/<image_name>')
+def start_gcp(image_name: str):
+    from experiments.gcp_experiment import test_gcp
+    test_gcp(image_name, logger)
+
+
+@app.route('/setup/gcp')
+def setup_unikraft():
+    from builder.unikraft_gcp_builder import setup_unikraft_image_for_gce
+    setup_unikraft_image_for_gce(logger)
 
 
 @app.route('/generateDataset')
@@ -218,5 +253,3 @@ if __name__ == '__main__':
     # http://flask.pocoo.org/docs/1.0/quickstart/#static-files. Once deployed,
     # App Engine itself will serve those files as configured in app.yaml.
     app.run(host='127.0.0.1', port=8080, debug=True)
-
-
