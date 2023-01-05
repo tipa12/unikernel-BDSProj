@@ -1,4 +1,7 @@
+import logging
+
 from flask import Flask, render_template, request
+
 from tupleGenerator import generate_tuples
 from google.cloud import firestore
 # Imports the Google Cloud client library
@@ -9,9 +12,24 @@ import pickle
 
 app = Flask(__name__)
 
+logger = logging.getLogger("Logger")
+logger.setLevel(logging.DEBUG)
+# Create a console handler
+console_handler = logging.StreamHandler()
+# Set the console handler level to DEBUG
+console_handler.setLevel(logging.DEBUG)
+# Create a formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Set the formatter for the console handler
+console_handler.setFormatter(formatter)
+# Add the console handler to the logger
+logger.addHandler(console_handler)
+
+
 @app.route('/')
 def root():
     return 'Please give an argument to the URL.'
+
 
 def generateUniqueID():
     # Generate a unique ID
@@ -28,8 +46,10 @@ def generateUniqueID():
 
     return uniqueIdWithDateTime
 
+
 def tupleToDict(tuple):
     return {str(i): val for i, val in enumerate(tuple)}
+
 
 def uploadObjectToCloudStorage(objectToUpload, bucketName, uniqueFilename):
     # Writing to tmp folder
@@ -47,8 +67,8 @@ def uploadObjectToCloudStorage(objectToUpload, bucketName, uniqueFilename):
     blob.upload_from_filename("/tmp/" + uniqueFilename + ".pkl")
 
 
-def writeDatasetToFirestoreAndCloudStorage(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples, unikernelFunction):
-
+def writeDatasetToFirestoreAndCloudStorage(name, sizeOfTuples, numberOfTuples, elementType, elementRangeStart,
+                                           elementRangeEnd, listOfTuples, unikernelFunction):
     datasetId = generateUniqueID()
     # Define the bucket and object name
     bucketName = 'datasetbucket3245'
@@ -76,6 +96,7 @@ def writeDatasetToFirestoreAndCloudStorage(name, sizeOfTuples, numberOfTuples, e
     uploadObjectToCloudStorage(listOfTuples, bucketName, datasetId)
     return datasetId
 
+
 def downloadDataset(datasetId):
     # Set up the Cloud Storage client
     client = storage.Client()
@@ -93,6 +114,7 @@ def downloadDataset(datasetId):
     data = pickle.loads(file)
 
     return data
+
 
 def evaluateDataset(datasetId, unikernelFunction):
     data = downloadDataset(datasetId)
@@ -116,7 +138,19 @@ def evaluateDataset(datasetId, unikernelFunction):
     doc_ref.update({
         'acceptedTuples': acceptedTuples,
         'rejectedTuples': rejectedTuples
-        })
+    })
+
+
+@app.route('/start/gcp/<image_name>')
+def start_gcp(image_name: str):
+    from experiments.gcp_experiment import test_gcp
+    test_gcp(image_name, logger)
+
+
+@app.route('/setup/gcp')
+def setup_unikraft():
+    from builder.unikraft_gcp_builder import setup_unikraft_image_for_gce
+    setup_unikraft_image_for_gce(logger)
 
 
 @app.route('/generateDataset')
@@ -131,9 +165,11 @@ def generateDatasetEndpoint():
 
     # generate tuples
     listOfTuples = generate_tuples(sizeOfTuples, numberOfTuples, elementType, (elementRangeStart, elementRangeEnd))
-    datasetId = writeDatasetToFirestoreAndCloudStorage("default", sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd, listOfTuples, unikernelFunction)
+    datasetId = writeDatasetToFirestoreAndCloudStorage("default", sizeOfTuples, numberOfTuples, elementType,
+                                                       elementRangeStart, elementRangeEnd, listOfTuples,
+                                                       unikernelFunction)
 
-    #return tuples
+    # return tuples
     return datasetId
 
 
@@ -142,7 +178,7 @@ def evaluateDatasetEndpoint():
     datasetId = request.args.get('datasetId')
     evaluateDataset(datasetId, 'filter')
     return datasetId
-    
+
 
 if __name__ == '__main__':
     # This is used when running locally only. When deploying to Google App
@@ -153,5 +189,3 @@ if __name__ == '__main__':
     # http://flask.pocoo.org/docs/1.0/quickstart/#static-files. Once deployed,
     # App Engine itself will serve those files as configured in app.yaml.
     app.run(host='127.0.0.1', port=8080, debug=True)
-
-
