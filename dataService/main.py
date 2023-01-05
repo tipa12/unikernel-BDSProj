@@ -166,6 +166,19 @@ def setup_unikraft():
     from builder.unikraft_gcp_builder import setup_unikraft_image_for_gce
     setup_unikraft_image_for_gce(logger)
 
+@app.route('/startTest')
+def startTest():
+    datasetId = request.args.get('datasetId')
+    evaluationId = request.args.get('evaluationId')
+    delay = float(request.args.get('delay'))
+    imageName = request.args.get('imageName')
+    
+    data = downloadDataset(datasetId)
+
+    from experiments.gcp_experiment import test_gcp
+    test_gcp(imageName, logger, data, delay)
+
+    return "OK"
 
 @app.route('/generateDataset')
 def generateDatasetEndpoint():
