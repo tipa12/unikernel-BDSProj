@@ -7,6 +7,7 @@ from google.cloud import storage
 import uuid
 import datetime
 import pickle
+import asyncio
 
 app = Flask(__name__)
 
@@ -150,6 +151,7 @@ def evaluateDataset(datasetId, unikernelFunction):
 
     # Set the capital field
     doc_ref.update({
+        'validated': True,
         'acceptedTuples': acceptedTuples,
         'rejectedTuples': rejectedTuples
     })
