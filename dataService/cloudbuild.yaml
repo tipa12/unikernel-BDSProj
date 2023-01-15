@@ -27,7 +27,7 @@ steps:
 #  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'nohup python3 -m main.py &']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'add-metadata', 'dataService', 'europe-west3-a', '--metadata-from-file', 'startup-script=start.sh']
+  args: ['compute', 'instances', 'add-metadata', 'dataService', '--metadata-from-file', 'startup-script=start.sh']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo reboot']
