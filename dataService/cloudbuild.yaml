@@ -28,6 +28,9 @@ steps:
   args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
 
 - name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
+
+- name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
