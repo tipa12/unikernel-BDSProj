@@ -1,10 +1,13 @@
 import logging
 from flask import Flask, render_template, request, jsonify
+from tupleGenerator import generate_tuples
 from google.cloud import firestore
+# Imports the Google Cloud client library
+from google.cloud import storage
 import uuid
 import datetime
-from google.cloud import pubsub_v1
-import json
+import pickle
+import asyncio
 
 app = Flask(__name__)
 
@@ -56,6 +59,24 @@ def generateUniqueEvaluationId():
 
     return uniqueIdWithDateTime
 
+def tupleToDict(tuple):
+    return {str(i): val for i, val in enumerate(tuple)}
+
+def uploadObjectToCloudStorage(uniqueFilename, objectToUpload, bucketName):
+    # Writing to tmp folder
+    with open("/tmp/" + uniqueFilename + ".pkl", "wb") as file:
+        # Serialize the list
+        pickle.dump(objectToUpload, file)
+
+    # Create a storage client
+    storageClient = storage.Client()
+    # Get a reference to the bucket
+    bucket = storageClient.bucket(bucketName)
+    # bucket = storage_client.get_bucket(bucketName)
+
+    blob = bucket.blob(uniqueFilename + ".pkl")
+    blob.upload_from_filename("/tmp/" + uniqueFilename + ".pkl")
+
 def updateFirestore(collection, documentId, updateDict):
     # Create a Firestore client
     db = firestore.Client()
@@ -77,22 +98,66 @@ def createFirestoreDocument(collection, documentId, setDict):
     # Set the data for the document
     docRef.set(setDict)
 
-def sendToMessageBroker(topicName, data, functionName):
-    # function expects a json object as data
 
-    # Google Cloud project ID
-    projectId = "bdspro"
+def downloadDataset(datasetId):
+    # Set up the Cloud Storage client
+    client = storage.Client()
 
-    # Create a publisher client
-    publisher = pubsub_v1.PublisherClient()
+    # Set the name of the bucket and the file to download
+    bucketName = "datasetbucket3245"
+    fileName = datasetId + ".pkl"
 
-    data = json.dumps(data)
+    # Use the client to download the file
+    bucket = client.bucket(bucketName)
+    blob = bucket.blob(fileName)
+    file = blob.download_as_string()
 
-    # Publish the message
-    topic_path = publisher.topic_path(projectId, topicName)
-    publisher.publish(topic_path, data=data.encode('utf-8'), functionName=functionName)
+    # Deserialize the data from the file
+    data = pickle.loads(file)
 
-""" @app.route('/start/gcp/<image_name>')
+    return data
+
+def generateDataset(datasetId, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd):
+
+    # generate tuples
+    listOfTuples = generate_tuples(sizeOfTuples, numberOfTuples, elementType, (elementRangeStart, elementRangeEnd))
+
+    # bucket name for cloud storage
+    bucketName = 'datasetbucket3245'
+
+    uploadObjectToCloudStorage(datasetId, listOfTuples, bucketName)
+    updateFirestore('datasets', datasetId, {'uploadedToCloudStorage': True, "datasetFilename": datasetId + ".pkl"})
+
+    return datasetId
+
+def evaluateDataset(datasetId, unikernelFunction):
+    data = downloadDataset(datasetId)
+    acceptedTuples = 0
+    rejectedTuples = 0
+
+    if unikernelFunction == 'filter':
+        for tuple in data:
+            if tuple[0] > 0:
+                acceptedTuples += 1
+            else:
+                rejectedTuples += 1
+    elif unikernelFunction == 'map':
+        acceptedTuples = len(data)
+    else:
+        print("Error: Unikernel function not recognized")
+
+    return acceptedTuples, rejectedTuples
+
+
+    # Set the capital field
+    doc_ref.update({
+        'validated': True,
+        'acceptedTuples': acceptedTuples,
+        'rejectedTuples': rejectedTuples
+    })
+
+
+@app.route('/start/gcp/<image_name>')
 def start_gcp(image_name: str):
     from experiments.gcp_experiment import test_gcp
     test_gcp(image_name, logger)
@@ -115,7 +180,7 @@ def startTest():
     from experiments.gcp_experiment import test_gcp
     test_gcp(imageName, logger, data, delay)
 
-    return "OK" """
+    return "OK"
 
 @app.route('/generateDataset')
 def generateDatasetEndpoint():
@@ -134,7 +199,7 @@ def generateDatasetEndpoint():
     if not request.args.get('name'):
         name = 'default'
 
-    datasetMetaDict = {
+    firestoreDict = {
         "name": name,
         "sizeOfTuples": sizeOfTuples,
         "numberOfTuples": numberOfTuples,
@@ -144,15 +209,10 @@ def generateDatasetEndpoint():
         "datasetId": datasetId
     }
 
-    # connect to message broker
+    createFirestoreDocument('datasets', datasetId, firestoreDict)
+
     # generate dataset
-    
-    # The name of the Pub/Sub topic
-    topicName = "dataServicePipeline"
-
-    sendToMessageBroker(topicName, datasetMetaDict, 'generateDataset')
-
-    createFirestoreDocument('datasets', datasetId, datasetMetaDict)
+    generateDataset(datasetId, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd)
 
     #return datasetId, parameters
     response = {
@@ -172,21 +232,22 @@ def evaluateDatasetEndpoint():
 
     evaluationId = generateUniqueEvaluationId()
 
-    evaluationMetaDict = {
+    firestoreDict = {
         "unikernelFunction": unikernelFunction,
         "datasetId": datasetId,
         "evaluationId": evaluationId
     }
 
-    # connect to message broker
-    # generate dataset
+    createFirestoreDocument('evaluations', evaluationId, firestoreDict)
 
-    # The name of the Pub/Sub topic
-    topicName = "dataServicePipeline"
+    acceptedTuples, rejectedTuples = evaluateDataset(datasetId, unikernelFunction)
 
-    sendToMessageBroker(topicName, evaluationMetaDict, 'evaluateDataset')
+    updateDict = {
+        "acceptedTuples": acceptedTuples,
+        "rejectedTuples": rejectedTuples
+    }
 
-    createFirestoreDocument('evaluations', evaluationId, evaluationMetaDict)
+    updateFirestore('evaluations', evaluationId, updateDict)
 
     #return datasetId, evaluationId, parameters
     response = {

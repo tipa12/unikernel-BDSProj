@@ -1,0 +1,55 @@
+steps:
+#- name: 'gcr.io/cloud-builders/git'
+#  args: ['clone', "https://$$GITHUB_TOKEN@github.com/tipa12/unikernel-BDSProj.git", '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
+#  secretEnv: ['GITHUB_TOKEN']
+
+#- name: 'python:3.8'
+#  entrypoint: 'pip'
+#  args: ['install', '-r', 'dataService/requirements.txt']
+
+#- name: 'gcr.io/cloud-builders/gcloud'
+#  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['components', 'update']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a', '--quiet']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'instances', 'create', 'dataservice', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'scp', '--recurse', '--zone', 'europe-west3-a', 'builder', 'launcher', 'experiments', 'main.py', 'tupleGenerator.py', 'requirements.txt', 'start.sh', 'dataservice:~/']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'scp', '--zone', 'europe-west3-a', 'scripts/solo5-virtio-mkimage.sh', 'dataservice:/usr/sbin/']
+
+#- name: 'gcr.io/cloud-builders/gcloud'
+#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip ca-certificates curl gnupg lsb-release && sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
+
+#- name: 'gcr.io/cloud-builders/gcloud'
+#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:80 main:app']
+
+
+#availableSecrets:
+#  secretManager:
+#  - versionName: projects/bdspro/secrets/githubsecret/versions/latest
+#    env: 'GITHUB_TOKEN'

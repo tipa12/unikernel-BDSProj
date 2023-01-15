@@ -1,15 +1,13 @@
 import logging
-from flask import Flask, render_template, request, jsonify
-from tupleGenerator import generate_tuples
 from google.cloud import firestore
 # Imports the Google Cloud client library
 from google.cloud import storage
+
+from google.cloud import pubsub_v1
 import uuid
 import datetime
 import pickle
 import asyncio
-
-app = Flask(__name__)
 
 logger = logging.getLogger("Logger")
 logger.setLevel(logging.DEBUG)
@@ -25,57 +23,8 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 
-@app.route('/')
 def root():
     return 'Please give an argument to the URL.'
-
-def generateUniqueDatasetId():
-    # Generate a unique ID
-    uniqueId = str(uuid.uuid4())
-
-    # Get the current date and time
-    now = datetime.datetime.now()
-
-    # Format the date and time as a string
-    dateTimeStr = now.strftime("%Y%m%d%H%M%S")
-
-    # Concatenate the unique ID and the date/time string
-    uniqueIdWithDateTime = 'ds-' + dateTimeStr + '-' + uniqueId
-
-    return uniqueIdWithDateTime
-
-def generateUniqueEvaluationId():
-    # Generate a unique ID
-    uniqueId = str(uuid.uuid4())
-
-    # Get the current date and time
-    now = datetime.datetime.now()
-
-    # Format the date and time as a string
-    dateTimeStr = now.strftime("%Y%m%d%H%M%S")
-
-    # Concatenate the unique ID and the date/time string
-    uniqueIdWithDateTime = 'ev-' + dateTimeStr + '-' + uniqueId
-
-    return uniqueIdWithDateTime
-
-def tupleToDict(tuple):
-    return {str(i): val for i, val in enumerate(tuple)}
-
-def uploadObjectToCloudStorage(uniqueFilename, objectToUpload, bucketName):
-    # Writing to tmp folder
-    with open("/tmp/" + uniqueFilename + ".pkl", "wb") as file:
-        # Serialize the list
-        pickle.dump(objectToUpload, file)
-
-    # Create a storage client
-    storageClient = storage.Client()
-    # Get a reference to the bucket
-    bucket = storageClient.bucket(bucketName)
-    # bucket = storage_client.get_bucket(bucketName)
-
-    blob = bucket.blob(uniqueFilename + ".pkl")
-    blob.upload_from_filename("/tmp/" + uniqueFilename + ".pkl")
 
 def updateFirestore(collection, documentId, updateDict):
     # Create a Firestore client
@@ -117,19 +66,6 @@ def downloadDataset(datasetId):
 
     return data
 
-def generateDataset(datasetId, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd):
-
-    # generate tuples
-    listOfTuples = generate_tuples(sizeOfTuples, numberOfTuples, elementType, (elementRangeStart, elementRangeEnd))
-
-    # bucket name for cloud storage
-    bucketName = 'datasetbucket3245'
-
-    uploadObjectToCloudStorage(datasetId, listOfTuples, bucketName)
-    updateFirestore('datasets', datasetId, {'uploadedToCloudStorage': True, "datasetFilename": datasetId + ".pkl"})
-
-    return datasetId
-
 def evaluateDataset(datasetId, unikernelFunction):
     data = downloadDataset(datasetId)
     acceptedTuples = 0
@@ -148,123 +84,4 @@ def evaluateDataset(datasetId, unikernelFunction):
 
     return acceptedTuples, rejectedTuples
 
-
-    # Set the capital field
-    doc_ref.update({
-        'validated': True,
-        'acceptedTuples': acceptedTuples,
-        'rejectedTuples': rejectedTuples
-    })
-
-
-@app.route('/start/gcp/<image_name>')
-def start_gcp(image_name: str):
-    from experiments.gcp_experiment import test_gcp
-    test_gcp(image_name, logger)
-
-
-@app.route('/setup/gcp')
-def setup_unikraft():
-    from builder.unikraft_gcp_builder import setup_unikraft_image_for_gce
-    setup_unikraft_image_for_gce(logger)
-
-@app.route('/startTest')
-def startTest():
-    datasetId = request.args.get('datasetId')
-    evaluationId = request.args.get('evaluationId')
-    delay = float(request.args.get('delay'))
-    imageName = request.args.get('imageName')
-    
-    data = downloadDataset(datasetId)
-
-    from experiments.gcp_experiment import test_gcp
-    test_gcp(imageName, logger, data, delay)
-
-    return "OK"
-
-@app.route('/generateDataset')
-def generateDatasetEndpoint():
-    allParams = request.args.to_dict()
-
-    # set parameters/arguments
-    sizeOfTuples = int(request.args.get('sizeOfTuples'))
-    numberOfTuples = int(request.args.get('numberOfTuples'))
-    elementType = request.args.get('elementType')
-    elementRangeStart = int(request.args.get('elementRangeStart'))
-    elementRangeEnd = int(request.args.get('elementRangeEnd'))
-    name = request.args.get('name')
-
-    # generate datasetId
-    datasetId = generateUniqueDatasetId()
-    if not request.args.get('name'):
-        name = 'default'
-
-    firestoreDict = {
-        "name": name,
-        "sizeOfTuples": sizeOfTuples,
-        "numberOfTuples": numberOfTuples,
-        "elementType": elementType,
-        "elementRangeStart": elementRangeStart,
-        "elementRangeEnd": elementRangeEnd,
-        "datasetId": datasetId
-    }
-
-    createFirestoreDocument('datasets', datasetId, firestoreDict)
-
-    # generate dataset
-    generateDataset(datasetId, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd)
-
-    #return datasetId, parameters
-    response = {
-        'datasetId': datasetId,
-        'message': 'Success',
-        'parameters': allParams
-    }
-    return jsonify(response)
-
-
-@app.route('/evaluateDataset')
-def evaluateDatasetEndpoint():
-    allParams = request.args.to_dict()
-    # function to evaluate dataset: filter, map
-    unikernelFunction = request.args.get('unikernelFunction')
-    datasetId = request.args.get('datasetId')
-
-    evaluationId = generateUniqueEvaluationId()
-
-    firestoreDict = {
-        "unikernelFunction": unikernelFunction,
-        "datasetId": datasetId,
-        "evaluationId": evaluationId
-    }
-
-    createFirestoreDocument('evaluations', evaluationId, firestoreDict)
-
-    acceptedTuples, rejectedTuples = evaluateDataset(datasetId, unikernelFunction)
-
-    updateDict = {
-        "acceptedTuples": acceptedTuples,
-        "rejectedTuples": rejectedTuples
-    }
-
-    updateFirestore('evaluations', evaluationId, updateDict)
-
-    #return datasetId, evaluationId, parameters
-    response = {
-        'datasetId': datasetId,
-        'evaluationId': evaluationId,
-        'message': 'Success',
-        'parameters': allParams
-    }
-
-    return jsonify(response)
-
-if __name__ == '__main__':
-    # This is used when running locally only. When deploying to Google App
-    # Engine, a webserver process such as Gunicorn will serve the app. This
-    # can be configured by adding an `entrypoint` to app.yaml.
-    # Flask's development server will automatically serve static files in
-    # the "static" directory. See:
-    # http://flask.pocoo.org/docs/1.0/quickstart/#static-files. Once deployed,
-    # App Engine itself will serve those files as configured in app.yaml.
-    app.run(host='127.0.0.1', port=8080, debug=True)
+subscriber = pubsub_v1.SubscriberClient()
