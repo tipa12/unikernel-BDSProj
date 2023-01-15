@@ -52,10 +52,10 @@ def callback(message):
 projectId = "bdspro"
 
 # The name of the Pub/Sub topic
-topicName = "evaluationServicePipeline"
+topicName = "testingServicePipeline"
 
 # The name of the subscription
-subscriptionName = "evaluationServicePipeline-sub"
+subscriptionName = "testingServicePipeline-sub"
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()
