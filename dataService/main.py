@@ -1,17 +1,12 @@
 import logging
-from flask import Flask, render_template, request, jsonify
 from tupleGenerator import generate_tuples
 from google.cloud import firestore
 # Imports the Google Cloud client library
 from google.cloud import storage
-import uuid
 import datetime
 import pickle
-import asyncio
 import time
 from google.cloud import pubsub_v1
-from google.api_core.exceptions import AlreadyExists
-import os
 import json
 
 app = Flask(__name__)
