@@ -1,14 +1,4 @@
 steps:
-#- name: 'gcr.io/cloud-builders/git'
-#  args: ['clone', "https://$$GITHUB_TOKEN@github.com/tipa12/unikernel-BDSProj.git", '--branch', 'tpabst_deployTupleGeneratoToComputeEngine', '--single-branch', '--depth', '1']
-#  secretEnv: ['GITHUB_TOKEN']
-
-#- name: 'python:3.8'
-#  entrypoint: 'pip'
-#  args: ['install', '-r', 'dataService/requirements.txt']
-
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a']
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['components', 'update']
 
@@ -34,11 +24,13 @@ steps:
   args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+#  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'nohup python3 -m main.py &']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'nohup python3 -m main.py &']
+  args: ['compute', 'instances', 'add-metadata', 'dataService', 'europe-west3-a', '--metadata-from-file', 'startup-script=start.sh']
 
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'ssh', 'dataservice', '--zone', 'europe-west3-a', '--command', 'sudo reboot']
 
 #availableSecrets:
 #  secretManager:
