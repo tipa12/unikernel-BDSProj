@@ -129,6 +129,9 @@ def generateDatasetEndpoint():
     elementRangeEnd = int(request.args.get('elementRangeEnd'))
     name = request.args.get('name')
 
+    if numberOfTuples > 1000000:
+        numberOfTuples = 1000000
+
     # generate datasetId
     datasetId = generateUniqueDatasetId()
     if not request.args.get('name'):
