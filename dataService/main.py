@@ -9,8 +9,6 @@ import time
 from google.cloud import pubsub_v1
 import json
 
-app = Flask(__name__)
-
 logger = logging.getLogger("Logger")
 logger.setLevel(logging.DEBUG)
 # Create a console handler
