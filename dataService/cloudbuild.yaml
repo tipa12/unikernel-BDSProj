@@ -1,6 +1,6 @@
 steps:
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['components', 'update']
+#- name: 'gcr.io/cloud-builders/gcloud'
+#  args: ['components', 'update']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'instances', 'delete', 'dataservice', '--zone', 'europe-west3-a', '--quiet']
