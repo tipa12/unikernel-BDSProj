@@ -5,42 +5,42 @@ steps:
 
 #- name: 'python:3.8'
 #  entrypoint: 'pip'
-#  args: ['install', '-r', 'apiGateway/requirements.txt']
+#  args: ['install', '-r', 'apigateway/requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'instances', 'delete', 'apiGateway', '--zone', 'europe-west3-a']
+#  args: ['compute', 'instances', 'delete', 'apigateway', '--zone', 'europe-west3-a']
 #- name: 'gcr.io/cloud-builders/gcloud'
 #  args: ['components', 'update']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'delete', 'apiGateway', '--zone', 'europe-west3-a', '--quiet']
+  args: ['compute', 'instances', 'delete', 'apigateway', '--zone', 'europe-west3-a', '--quiet']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'apiGateway', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
+  args: ['compute', 'instances', 'create', 'apigateway', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'scp', '--recurse', '--zone', 'europe-west3-a', 'flaskApi/main.py', 'flaskApi/requirements.txt', 'apiGateway:~/']
+  args: ['compute', 'scp', '--recurse', '--zone', 'europe-west3-a', 'flaskApi/main.py', 'flaskApi/requirements.txt', 'apigateway:~/']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
+#  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
+  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
+  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
+  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
+  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
+#  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'python3 main.py']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'apiGateway', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:80 main:app']
+  args: ['compute', 'ssh', 'apigateway', '--zone', 'europe-west3-a', '--command', 'gunicorn -w 4 -b 0.0.0.0:80 main:app']
 
 
 #availableSecrets:
