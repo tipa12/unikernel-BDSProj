@@ -261,3 +261,17 @@ def create_from_custom_image(
     disks = [disk_from_image(disk_type, 1, True, custom_image_link, True)]
     instance = create_instance(project_id, zone, instance_name, disks)
     return instance
+
+
+def delete_instance(
+        project_id: str, zone: str, instance_name: str
+):
+    instance_client = compute_v1.InstancesClient()
+    instance_client.delete(project=project_id, zone=zone, instance=instance_name)
+
+
+def print_serial_output(
+    project_id: str, zone: str, instance_name: str
+) -> str:
+    instance_client = compute_v1.InstancesClient()
+    return instance_client.get_serial_port_output(project=project_id, zone=zone, instance=instance_name).contents
