@@ -35,6 +35,14 @@ class TestContext:
     sink_socket: socket.socket = None
     instance_clean_up: Callable = None
     init_stats: (int, int, int, int)
+    first_tuple_sent_timestamp = None
+    first_tuple_recv_timestamp = None
+    last_tuple_sent_timestamp = None
+    last_tuple_recv_timestamp = None
+
+    number_of_tuples_sent = 0
+    number_of_tuples_recv = 0
+    number_of_expected_tuples = 0
 
     def __init__(self, logger: logging.Logger) -> None:
         super().__init__()
@@ -116,13 +124,12 @@ def test_boot_time(context: TestContext, image_name: str, launcher=launch_locall
     context.logger.info(f"Unikernel Booted in {stop - start}s.")
 
 
-def handle_client(client_socket, logger: logging.Logger, data, delay, scale, ramp_factor):
+def handle_client(client_socket, context: TestContext, data, delay, scale, ramp_factor):
     # Send data to the client at an increasing rate
-    number_of_tuples_sent = 0
-    qualifying_tuples = 0
+    start = time.perf_counter()
     for _ in range(scale):
         for data_tuple in data:
-            data_tuple = (data_tuple[0], number_of_tuples_sent, data_tuple[2], data_tuple[3], data_tuple[4])
+            data_tuple = (data_tuple[0], context.number_of_tuples_sent, data_tuple[2], data_tuple[3], data_tuple[4])
             # Construct the data as a tuple
             # data = (i, time.perf_counter())
 
@@ -132,8 +139,10 @@ def handle_client(client_socket, logger: logging.Logger, data, delay, scale, ram
 
             # Send the data to the client
             client_socket.send(packed_data)
-            number_of_tuples_sent += 1
-            if data_tuple[0] > 0: qualifying_tuples += 1
+            if context.number_of_tuples_sent == 0:
+                context.first_tuple_sent_timestamp = time.perf_counter()
+            context.number_of_tuples_sent += 1
+            if data_tuple[0] > 0: context.number_of_expected_tuples += 1
 
             # Decrease the delay time - comment out to send data at a constant rate
             delay *= 1 / ramp_factor
@@ -143,25 +152,24 @@ def handle_client(client_socket, logger: logging.Logger, data, delay, scale, ram
 
             time.sleep(delay)
 
+    context.last_tuple_sent_timestamp = time.perf_counter()
+
+    # make sure packets are flushed
     time.sleep(5)
-    logger.info(f"Sent {number_of_tuples_sent} tuples of which {qualifying_tuples} should pass the filter.")
 
 
-def handle_client_receiver(client_socket: socket, logger):
-    number_of_tuples_received = 0
+def handle_client_receiver(client_socket: socket, context: TestContext):
     while True:
         data = client_socket.recv(20)
+        if context.number_of_tuples_recv == 0:
+            context.first_tuple_recv_timestamp = time.perf_counter()
 
         if len(data) == 0:
-            logger.info("Receiving Done!")
+            context.last_tuple_recv_timestamp = time.perf_counter()
+            context.logger.info("Receiving Done!")
             break
 
-        tuple = struct.unpack('!5i', data)
-        number_of_tuples_received += 1
-
-        # logger.info(f"Received: ${tuple}")
-
-    logger.info(f"Received Tuples: {number_of_tuples_received}")
+        context.number_of_tuples_recv += 1
 
 
 def test_tuple_throughput_receiver(context: TestContext):
@@ -182,7 +190,7 @@ def test_tuple_throughput_receiver(context: TestContext):
     context.logger.info(f"Receiver: Accepted a connection from {client_address}")
 
     # Handle the client's request
-    handle_client_receiver(server_socket, context.logger)
+    handle_client_receiver(server_socket, context)
 
 
 def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, socket_opts=True):
@@ -197,7 +205,6 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
         # Set the TCP_NODELAY option
         server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         assert server_socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY) == 1
-
 
     context.source_socket = server_socket
 
@@ -219,7 +226,7 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
     time.sleep(5)
     context.init_stats = get_current_packet_loss()
     # Handle the client's request
-    handle_client(client_socket, context.logger, data, delay, scale, ramp_factor)
+    handle_client(client_socket, context, data, delay, scale, ramp_factor)
 
 
 def test_gcp(image_name: str, logger: logging.Logger, data, delay, scale=100, ramp_factor=1.05):
@@ -250,6 +257,22 @@ def test_gcp(image_name: str, logger: logging.Logger, data, delay, scale=100, ra
 
         logger.info(
             f"Packet-Loss In: {fin_dropin - context.init_stats[2]} / Out: {fin_dropout - context.init_stats[3]}")
+
+        latency_first_first = context.first_tuple_recv_timestamp - context.first_tuple_sent_timestamp
+        latency_last_last = context.last_tuple_recv_timestamp - context.last_tuple_sent_timestamp
+        total = context.last_tuple_recv_timestamp - context.first_tuple_sent_timestamp
+
+        logger.info(
+            "\n".join([
+                "Stats:",
+                f"Number of Tuples sent: {context.number_of_tuples_sent}",
+                f"Number of Tuples expected: {context.number_of_expected_tuples}",
+                f"Number of Tuples received: {context.number_of_tuples_recv}",
+                f"Total Time: {total}s. TPS of {context.number_of_tuples_sent / total}",
+                f"First Tuple Latency: {latency_first_first}s",
+                f"Last Tuple Latency: {latency_last_last}s",
+            ])
+        )
 
         if tuple_throughput_test.is_alive():
             raise ExperimentFailedException("Timeout")
