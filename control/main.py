@@ -7,6 +7,7 @@ import ControlFunctions as control
 
 # use the subscriber client to create a subscription and a callback
 def callback(message):
+    message.ack()
     serviceType = message.attributes['serviceType']
 
     if(serviceType == 'startExperiment'):
@@ -16,7 +17,6 @@ def callback(message):
         #logger.error('Unknown serviceType: {}'.format(serviceType))
 
     print("Received message: {}".format(message))
-    message.ack()
 
 # create Logger
 #logger = log.createLogger()
