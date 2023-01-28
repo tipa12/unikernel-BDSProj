@@ -4,5 +4,7 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/$PROJECT_ID/control-instance']
 - name: 'gcr.io/cloud-builders/gcloud'
+  args: ['compute', 'instances', 'delete', 'control', '--project=bdspro', '--zone=europe-west3-a', '--quiet']
+- name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'instances', 'create-with-container', 'control',
          '--project=$PROJECT_ID', '--zone=europe-west3-a', '--container-image=gcr.io/$PROJECT_ID/control-instance', '--machine-type=e2-micro']
