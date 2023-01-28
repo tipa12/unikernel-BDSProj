@@ -1,61 +1,54 @@
-import logging
-from google.cloud import firestore
 # Imports the Google Cloud client library
 from google.cloud import pubsub_v1
 import time
-import datetime
-import socket
+import json
+import functions.GenerateDataset as gd
+import functions.CreateEvaluation as ce
+import functions.SendData as sd
+import LoggingFunctions as log
 
-logger = logging.getLogger("Logger")
-logger.setLevel(logging.DEBUG)
-# Create a console handler
-console_handler = logging.StreamHandler()
-# Set the console handler level to DEBUG
-console_handler.setLevel(logging.DEBUG)
-# Create a formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# Set the formatter for the console handler
-console_handler.setFormatter(formatter)
-# Add the console handler to the logger
-logger.addHandler(console_handler)
-
-def updateFirestore(collection, documentId, updateDict):
-    # Create a Firestore client
-    db = firestore.Client()
-
-    # Create a new document in the "datasets" collection
-    docRef = db.collection(collection).document(documentId)
-    updateDict.update({'lastmodified': datetime.datetime.now()})
-
-    # Set the data for the document
-    docRef.update(updateDict)
-
-def createFirestoreDocument(collection, documentId, setDict):
-
-    # Create a Firestore client
-    db = firestore.Client()
-    # Create a new document in the "datasets" collection
-    docRef = db.collection(collection).document(documentId)
-    setDict.update({"created": datetime.datetime.now(), 'lastmodified': datetime.datetime.now()})
-    # Set the data for the document
-    docRef.set(setDict)
+logger = log.createLogger()
 
 
 # use the subscriber client to create a subscription and a callback
 def callback(message):
-    # TODO: implement the callback function
-    print("Received message: {}".format(message))
     message.ack()
+    serviceType = message.attributes['serviceType']
+
+    messageData = json.loads(message.data.decode('utf-8'))
+
+    if(serviceType == 'generateDataset'):
+        logger.info("Create new dataset")
+        gd.generateDataset(messageData, logger)
+    elif(serviceType == 'createEvaluation'):
+        logger.info("Create new evaluation")
+        ce.createEvaluation(messageData, logger)
+    elif(serviceType == 'sendData'):
+        logger.info("Send data to Unikernel")
+        sd.sendData(messageData, logger)
+    else:
+        print('Unknown serviceType: {}'.format(serviceType))
+        logger.error('Unknown serviceType: {}'.format(serviceType))
+
+    # message.datasetId
+
+    # message.evaluationId
+
+    # wie viele tuples
+
+    # funktion von unikernel
+    
+    # adresse + port von evaluationService
 
 
 # Your Google Cloud project ID
 projectId = "bdspro"
 
 # The name of the Pub/Sub topic
-topicName = "testingServicePipeline"
+topicName = "sourcePipeline"
 
 # The name of the subscription
-subscriptionName = "testingServicePipeline-sub"
+subscriptionName = "sourcePipeline-sub"
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()

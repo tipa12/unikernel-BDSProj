@@ -249,7 +249,7 @@ def newExperimentEndpoint():
     sourceTopicName = "sourcePipeline"
 
     sourcePipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
-    sourcePipelineMessage['port'] = 5000
+    sourcePipelineMessage['port'] = 8081
 
     sendToMessageBroker(sourceTopicName, sourcePipelineMessage)
 
@@ -257,7 +257,7 @@ def newExperimentEndpoint():
     sinkTopicName = "sinkPipeline"
 
     sinkPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
-    sinkPipelineMessage['port'] = 5000
+    sinkPipelineMessage['port'] = 8081
 
     sendToMessageBroker(sinkTopicName, sinkPipelineMessage)
 

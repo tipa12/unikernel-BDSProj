@@ -3,7 +3,8 @@ import LoggingFunctions as log
 from google.cloud import pubsub_v1
 import ControlFunctions as control
 
-
+# create Logger
+logger = log.createLogger()
 
 # use the subscriber client to create a subscription and a callback
 def callback(message):
@@ -18,9 +19,6 @@ def callback(message):
         logger.error('Unknown serviceType: {}'.format(serviceType))
 
     print("Received message: {}".format(message))
-
-# create Logger
-logger = log.createLogger()
 
 # Your Google Cloud project ID
 projectId = "bdspro"

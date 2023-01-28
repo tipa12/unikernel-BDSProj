@@ -1,38 +1,10 @@
 steps:
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['components', 'update']
-
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/source-instance', '-f', 'source/Dockerfile', './source']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/$PROJECT_ID/source-instance']
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'delete', 'testingService', '--zone', 'europe-west3-a', '--quiet']
-
+  args: ['compute', 'instances', 'delete', 'source', '--project=bdspro', '--zone=europe-west3-a', '--quiet']
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'instances', 'create', 'testingService', '--service-account', 'bdspro@appspot.gserviceaccount.com', '--scopes', 'cloud-platform', '--zone', 'europe-west3-a', '--machine-type', 'e2-micro', '--image-family', 'ubuntu-2204-lts', '--image-project', 'ubuntu-os-cloud']
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'scp', '--recurse', '--zone', 'europe-west3-a', 'testingService/main.py', 'testingService/tupleGenerator.py', 'testingService/requirements.txt', 'testingService/start.sh', 'testingService:~/']
-
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'chmod +x start.sh']
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'sudo apt update -y']
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'sudo apt install -y python3-pip']
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'pip3 install -r requirements.txt']
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'nohup python3 -m main.py &']
-
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'instances', 'add-metadata', 'testingService', '--zone', 'europe-west3-a', '--metadata-from-file', 'startup-script=start.sh']
-
-#- name: 'gcr.io/cloud-builders/gcloud'
-#  args: ['compute', 'ssh', 'testingService', '--zone', 'europe-west3-a', '--command', 'sudo reboot']
-
-#availableSecrets:
-#  secretManager:
-#  - versionName: projects/bdspro/secrets/githubsecret/versions/latest
-#    env: 'GITHUB_TOKEN'
+  args: ['compute', 'instances', 'create-with-container', 'source',
+         '--project=$PROJECT_ID', '--zone=europe-west3-a', '--container-image=gcr.io/$PROJECT_ID/source-instance', '--machine-type=e2-micro', '--scopes=cloud-platform', '--network-interface=private-network-ip=10.156.0.52,subnet=default']
