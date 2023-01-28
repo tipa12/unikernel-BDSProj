@@ -56,6 +56,21 @@ def generateUniqueEvaluationId():
 
     return uniqueIdWithDateTime
 
+def generateUniqueTestId():
+    # Generate a unique ID
+    uniqueId = str(uuid.uuid4())
+
+    # Get the current date and time
+    now = datetime.datetime.now()
+
+    # Format the date and time as a string
+    dateTimeStr = now.strftime("%Y%m%d%H%M%S")
+
+    # Concatenate the unique ID and the date/time string
+    uniqueIdWithDateTime = 'test-' + dateTimeStr + '-' + uniqueId
+
+    return uniqueIdWithDateTime
+
 def updateFirestore(collection, documentId, updateDict):
     # Create a Firestore client
     db = firestore.Client()
@@ -192,6 +207,63 @@ def evaluateDatasetEndpoint():
 
     #return datasetId, evaluationId, parameters
     response = {
+        'datasetId': datasetId,
+        'evaluationId': evaluationId,
+        'message': 'Success',
+        'parameters': allParams
+    }
+
+    return jsonify(response)
+
+@app.route('/newExperiment')
+def newExperimentEndpoint():
+    allParams = request.args.to_dict()
+
+    datasetId = request.args.get('datasetId')
+    evaluationId = request.args.get('evaluationId')
+    delay = float(request.args.get('delay'))
+    numberOfTuples = int(request.args.get('numberOfTuples'))
+    imageName = request.args.get('imageName')
+
+    experimentId = generateUniqueTestId()
+
+    experimentMetaDict = {
+        "experimentId": experimentId,
+        "datasetId": datasetId,
+        "evaluationId": evaluationId,
+        "delay": delay,
+        "numberOfTuples": numberOfTuples,
+        "imageName": imageName
+    }
+
+    createFirestoreDocument('experiments', experimentId, experimentMetaDict)
+
+    # Send data to control instance
+    controlTopicName = "controlPipeline"
+
+    controlPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
+
+    sendToMessageBroker(controlTopicName, controlPipelineMessage)
+
+    # Send data to source instance
+    sourceTopicName = "sourcePipeline"
+
+    sourcePipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
+    sourcePipelineMessage['port'] = 5000
+
+    sendToMessageBroker(sourceTopicName, sourcePipelineMessage)
+
+    # Send data to sink instance
+    sinkTopicName = "sinkPipeline"
+
+    sinkPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
+    sinkPipelineMessage['port'] = 5000
+
+    sendToMessageBroker(sinkTopicName, sinkPipelineMessage)
+
+    #return datasetId, evaluationId, parameters
+    response = {
+        'experimentId': experimentId,
         'datasetId': datasetId,
         'evaluationId': evaluationId,
         'message': 'Success',
