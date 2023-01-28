@@ -13,13 +13,14 @@ def callback(message):
         control.startExperiment(message, logger)
     else:
         print('Unknown serviceType: {}'.format(serviceType))
-        logger.error('Unknown serviceType: {}'.format(serviceType))
+        #logger.error('Unknown serviceType: {}'.format(serviceType))
 
     print("Received message: {}".format(message))
     message.ack()
 
 # create Logger
-logger = log.createLogger()
+#logger = log.createLogger()
+logger = []
 
 # Your Google Cloud project ID
 projectId = "bdspro"
