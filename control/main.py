@@ -11,16 +11,16 @@ def callback(message):
     serviceType = message.attributes['serviceType']
 
     if(serviceType == 'startExperiment'):
+        logger.info("Start new experiment")
         control.startExperiment(message, logger)
     else:
         print('Unknown serviceType: {}'.format(serviceType))
-        #logger.error('Unknown serviceType: {}'.format(serviceType))
+        logger.error('Unknown serviceType: {}'.format(serviceType))
 
     print("Received message: {}".format(message))
 
 # create Logger
-#logger = log.createLogger()
-logger = []
+logger = log.createLogger()
 
 # Your Google Cloud project ID
 projectId = "bdspro"
@@ -43,6 +43,7 @@ subscriptionPath = subscriber.subscription_path(projectId, subscriptionName)
 future = subscriber.subscribe(subscriptionPath, callback)
 
 print("Listening for messages on {}...".format(subscriptionPath))
+logger.info("Listening for messages on {}...".format(subscriptionPath))
 
 # keep the main thread from exiting
 try:

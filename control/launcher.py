@@ -288,7 +288,7 @@ def launch_gcp(image_name: str, logger):
     response = create_from_custom_image(project, zone, f"{framework}-{test_id}",
                                         f"projects/bdspro/global/images/{image_name}")
 
-    #logger.info(f"GCP Instance Creation Request response:\n{response}")
+    logger.info(f"GCP Instance Creation Request response:\n{response}")
     return start
 
 
@@ -299,7 +299,7 @@ def receive_udp_packet(q: queue.Queue, logger):
     # TODO: Verify data and addr
     data, addr = sock.recvfrom(1024)
     q.put(time.perf_counter())
-    #logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
+    logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
 
 
 def boot_image(image_name: str, logger):
@@ -309,10 +309,10 @@ def boot_image(image_name: str, logger):
     start = launch_gcp(image_name, logger)
     udp_thread.join(30)
     if udp_thread.is_alive():
-        #logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
+        logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
         raise ExperimentFailedException("Boot Packet Timeout")
 
     stop = q.get(False)
-    #logger.info(f"Unikernel Booted in {stop - start}ms.")
+    logger.info(f"Unikernel Booted in {stop - start}ms.")
     return stop - start
 
