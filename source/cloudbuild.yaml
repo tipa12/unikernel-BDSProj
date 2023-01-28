@@ -7,4 +7,4 @@ steps:
   args: ['compute', 'instances', 'delete', 'source', '--project=bdspro', '--zone=europe-west3-a', '--quiet']
 - name: 'gcr.io/cloud-builders/gcloud'
   args: ['compute', 'instances', 'create-with-container', 'source',
-         '--project=$PROJECT_ID', '--zone=europe-west3-a', '--container-image=gcr.io/$PROJECT_ID/source-instance', '--machine-type=e2-micro', '--scopes=cloud-platform', '--network-interface=private-network-ip=10.156.0.52,subnet=default']
+         '--project=$PROJECT_ID', '--zone=europe-west3-a', '--container-image=gcr.io/$PROJECT_ID/source-instance', '--machine-type=e2-micro', '--scopes=cloud-platform', '--network-interface=private-network-ip=10.156.0.54,subnet=default']
