@@ -280,7 +280,7 @@ class ExperimentFailedException(Exception):
 def launch_gcp(image_name: str, logger):
     # Send an HTTP request using the requests library
     project = 'bdspro'
-    zone = 'europe-west1-b'
+    zone = 'europe-west3-a'
     test_id = uuid.uuid4()
     framework = "unikraft"
 
