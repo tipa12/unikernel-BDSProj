@@ -29,17 +29,6 @@ def callback(message):
     else:
         logger.error('Unknown serviceType: {}'.format(serviceType))
 
-    # message.datasetId
-
-    # message.evaluationId
-
-    # wie viele tuples
-
-    # funktion von unikernel
-    
-    # adresse + port von evaluationService
-
-
 # Your Google Cloud project ID
 projectId = "bdspro"
 
