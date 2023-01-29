@@ -222,6 +222,7 @@ def newExperimentEndpoint():
     datasetId = request.args.get('datasetId')
     evaluationId = request.args.get('evaluationId')
     delay = float(request.args.get('delay'))
+    iterations = int(request.args.get('iterations'))
     numberOfTuples = int(request.args.get('numberOfTuples'))
     imageName = request.args.get('imageName')
 
@@ -232,6 +233,7 @@ def newExperimentEndpoint():
         "datasetId": datasetId,
         "evaluationId": evaluationId,
         "delay": delay,
+        "iterations": iterations,
         "numberOfTuples": numberOfTuples,
         "imageName": imageName
     }

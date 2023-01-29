@@ -27,8 +27,14 @@ def generate_tuples(sizeOfTuples, numberOfTuples, elementType, elementRange):
 def tupleToDict(tuple):
     return {str(i): val for i, val in enumerate(tuple)}
 
-def generateDataset(datasetId, sizeOfTuples, numberOfTuples, elementType, elementRangeStart, elementRangeEnd):
-
+def generateDataset(messageData, logger):
+    datasetId = messageData['datasetId']
+    sizeOfTuples = messageData['sizeOfTuples']
+    numberOfTuples = messageData['numberOfTuples']
+    elementType = messageData['elementType']
+    elementRangeStart = messageData['elementRangeStart']
+    elementRangeEnd = messageData['elementRangeEnd']
+    
     # generate tuples
     listOfTuples = generate_tuples(sizeOfTuples, numberOfTuples, elementType, (elementRangeStart, elementRangeEnd))
 

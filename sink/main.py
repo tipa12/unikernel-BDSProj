@@ -2,9 +2,7 @@
 from google.cloud import pubsub_v1
 import time
 import json
-import functions.GenerateDataset as gd
-import functions.CreateEvaluation as ce
-import functions.SendData as sd
+import functions.ReceiveData as rd
 import LoggingFunctions as log
 
 logger = log.createLogger()
@@ -17,15 +15,9 @@ def callback(message):
 
     messageData = json.loads(message.data.decode('utf-8'))
 
-    if(serviceType == 'generateDataset'):
-        logger.info("Generate new dataset")
-        gd.generateDataset(messageData, logger)
-    elif(serviceType == 'createEvaluation'):
-        logger.info("Create new evaluation")
-        ce.createEvaluation(messageData, logger)
-    elif(serviceType == 'sendData'):
-        logger.info("Send data to Unikernel")
-        sd.sendData(messageData, logger)
+    if(serviceType == 'receiveData'):
+        logger.info("Wait for data from Unikernel")
+        rd.receiveData(messageData, logger)
     else:
         print('Unknown serviceType: {}'.format(serviceType))
         logger.error('Unknown serviceType: {}'.format(serviceType))
@@ -45,10 +37,10 @@ def callback(message):
 projectId = "bdspro"
 
 # The name of the Pub/Sub topic
-topicName = "sourcePipeline"
+topicName = "sinkPipeline"
 
 # The name of the subscription
-subscriptionName = "sourcePipeline-sub"
+subscriptionName = "sinkPipeline-sub"
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()
