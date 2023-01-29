@@ -4,13 +4,13 @@ import struct
 PORT = 8081
 
 def handleClient(client_socket, logger):
-    logger.info("Get data from client")
+    logger.info("Handle Client function started")
 
     tuples = []
     
     while True:
         data = client_socket.recv(20)
-
+        logger.info("Received data package")
         tuples.append(struct.unpack('!5i', data))
 
         if len(data) == 0:
