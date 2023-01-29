@@ -57,8 +57,8 @@ def test_boot_time_gcp(image_name: str, logger: logging.Logger):
     stop = q.get(False)
     logger.info(f"Unikernel Booted in {stop - start}ms.")
 
-def handle_client(client_socket, logger: logging.Logger, data, delay, iterations):
 
+def handle_client(client_socket, logger: logging.Logger, data, delay, iterations):
     # Send data to the client at an increasing rate
     for tuple in data:
         # Construct the data as a tuple
@@ -82,26 +82,29 @@ def handle_client(client_socket, logger: logging.Logger, data, delay, iterations
     logger.info("Tuple Throughput done")
 
 
-def test_tuple_throughput(logger: logging.Logger, data, delay, iterations = 1000):
+def test_tuple_throughput(logger: logging.Logger, data, delay, iterations=1000):
     # Create a TCP socket
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket = None
+    server_socket = None
+    try:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Bind the socket to a local address and port
-    server_socket.bind(('0.0.0.0', TUPLE_SOURCE_PORT))
+        # Bind the socket to a local address and port
+        server_socket.bind(('0.0.0.0', TUPLE_SOURCE_PORT))
 
-    # Start listening for incoming connections
-    server_socket.listen()
+        # Start listening for incoming connections
+        server_socket.listen()
 
-    # Accept a single incoming connection
-    client_socket, client_address = server_socket.accept()
-    print(f"Accepted a connection from {client_address}")
+        # Accept a single incoming connection
+        client_socket, client_address = server_socket.accept()
+        print(f"Accepted a connection from {client_address}")
 
-    # Handle the client's request
-    handle_client(client_socket, logger, data, delay, iterations)
-
-    # Close the client and server sockets
-    client_socket.close()
-    server_socket.close()
+        # Handle the client's request
+        handle_client(client_socket, logger, data, delay, iterations)
+    finally:
+        # Close the client and server sockets
+        if client_socket is not None: client_socket.close()
+        if server_socket is not None: server_socket.close()
 
 
 def test_gcp(image_name: str, logger: logging.Logger, data, delay):
@@ -114,6 +117,5 @@ def test_gcp(image_name: str, logger: logging.Logger, data, delay):
     # boot_time_test.join(30)
     tuple_throughput_test.join(10)
 
-    #if boot_time_test.is_alive() or tuple_throughput_test.is_alive():
+    # if boot_time_test.is_alive() or tuple_throughput_test.is_alive():
     #    raise ExperimentFailedException("Timeout")
-

@@ -29,24 +29,27 @@ BOOT_PACKAGE_PORT = 8080
 
 
 class TestContext:
-    logger: logging.Logger
-    source_socket: socket.socket = None
-    boot_socket: socket.socket = None
-    sink_socket: socket.socket = None
-    instance_clean_up: Callable = None
-    init_stats: (int, int, int, int)
-    first_tuple_sent_timestamp = None
-    first_tuple_recv_timestamp = None
-    last_tuple_sent_timestamp = None
-    last_tuple_recv_timestamp = None
-
-    number_of_tuples_sent = 0
-    number_of_tuples_recv = 0
-    number_of_expected_tuples = 0
 
     def __init__(self, logger: logging.Logger) -> None:
         super().__init__()
+        self.test_id: uuid.UUID = uuid.uuid4()
         self.logger = logger
+        logger: logging.Logger
+        self.uut_serial_log: str = None
+        self.source_socket: socket.socket = None
+        self.boot_socket: socket.socket = None
+        self.sink_socket: socket.socket = None
+        self.instance_clean_up: Callable = None
+        self.init_stats: (int, int, int, int)
+        self.tuples_send_timestamps = []
+        self.tuples_received_timestamps = []
+
+        self.packets_during_setup = (int, int, int, int)
+        self.packets_during_evaluation = (int, int, int, int)
+
+        self.number_of_tuples_sent = 0
+        self.number_of_tuples_recv = 0
+        self.number_of_expected_tuples = 0
 
     def clean_up(self):
         if self.source_socket is not None:
@@ -70,35 +73,36 @@ class ExperimentFailedException(Exception):
     pass
 
 
-def launch_locally(image_name: str, logger: logging.Logger):
+def launch_locally(context: TestContext, image_name: str):
     start = time.perf_counter()
     subprocess.call(["./scripts/qemu_guest.sh", "-b", "kraft0", image_name])
     return start
 
 
-def clean_up_gcp(logger: logging.Logger, project, zone, instance_name):
-    logger.info(f"Unikernel Serial:\n {'#' * 20}\n{print_serial_output(project, zone, instance_name)}\n{'#' * 20}\n")
+def clean_up_gcp(context: TestContext, project, zone, instance_name):
+    context.uut_serial_log = print_serial_output(project, zone, instance_name)
+    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
     delete_instance(project, zone, instance_name)
 
 
-def launch_gcp(image_name: str, logger: logging.Logger) -> (float, Callable):
+def launch_gcp(context: TestContext, image_name: str) -> (float, Callable):
     # Send an HTTP request using the requests library
     project = 'bdspro'
     zone = 'europe-west1-b'
-    test_id = uuid.uuid4()
     framework = "unikraft"
-    instance_name = f"{framework}-{test_id}"
+    instance_name = f"{framework}-{context.test_id}"
 
     start = time.perf_counter()
     response = create_from_custom_image(project, zone, instance_name,
                                         f"projects/bdspro/global/images/{image_name}")
 
-    return start, lambda: clean_up_gcp(logger, project, zone, instance_name)
+    return start, lambda: clean_up_gcp(context, project, zone, instance_name)
 
 
 def receive_udp_packet(context: TestContext, q: queue.Queue):
     # Create a UDP socket and listen for incoming packets
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('0.0.0.0', BOOT_PACKAGE_PORT))
     context.boot_socket = sock
     # TODO: Verify data and addr
@@ -112,7 +116,7 @@ def test_boot_time(context: TestContext, image_name: str, launcher=launch_locall
     udp_thread = threading.Thread(target=receive_udp_packet, args=(context, q))
     udp_thread.start()
 
-    start, clean_up = launcher(image_name, context.logger)
+    start, clean_up = launcher(context, image_name)
     context.instance_clean_up = clean_up
 
     udp_thread.join(30)
@@ -124,55 +128,77 @@ def test_boot_time(context: TestContext, image_name: str, launcher=launch_locall
     context.logger.info(f"Unikernel Booted in {stop - start}s.")
 
 
-def handle_client(client_socket, context: TestContext, data, delay, scale, ramp_factor):
+def handle_client(client_socket: socket.socket, context: TestContext, data, delay, scale, ramp_factor):
     # Send data to the client at an increasing rate
-    start = time.perf_counter()
+    client_socket.setblocking(False)
+
+    time_stamp = time.perf_counter()
+    number_of_tuples = 0
+
     for _ in range(scale):
         for data_tuple in data:
             data_tuple = (data_tuple[0], context.number_of_tuples_sent, data_tuple[2], data_tuple[3], data_tuple[4])
-            # Construct the data as a tuple
-            # data = (i, time.perf_counter())
 
             # logger.info(f"Sending: ${tuple}")
             # pack the values into a byte string
             packed_data = struct.pack('!5i', *data_tuple)
 
             # Send the data to the client
-            client_socket.send(packed_data)
-            if context.number_of_tuples_sent == 0:
-                context.first_tuple_sent_timestamp = time.perf_counter()
+            delay = 0.000001
+            counter = 0
+            while True:
+                try:
+                    client_socket.send(packed_data)
+                    break
+                except BlockingIOError as e:
+                    if counter == 0:
+                        delta = time_stamp
+                        time_stamp = time.perf_counter()
+                        delta = time_stamp - delta
+                        tuples_send_in_delta = context.number_of_tuples_sent - number_of_tuples
+                        number_of_tuples = context.number_of_tuples_sent
+                        print(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
+
+                    counter += 1
+                    time.sleep(delay)
+                    delay *= 2
+
             context.number_of_tuples_sent += 1
-            if data_tuple[0] > 0: context.number_of_expected_tuples += 1
+            if data_tuple[0] > 0:
+                if context.number_of_expected_tuples % scale // 100 == 0:
+                    context.tuples_send_timestamps.append(time.perf_counter())
+                context.number_of_expected_tuples += 1
 
             # Decrease the delay time - comment out to send data at a constant rate
             delay *= 1 / ramp_factor
 
-            if delay < 0.001:
+            if delay < 0.0001:
                 continue
 
             time.sleep(delay)
 
-    context.last_tuple_sent_timestamp = time.perf_counter()
+    print()
+    context.logger.info("Sending Done")
 
     # make sure packets are flushed
     time.sleep(5)
 
 
-def handle_client_receiver(client_socket: socket, context: TestContext):
+def handle_client_receiver(client_socket: socket, context: TestContext, scale: int):
     while True:
         data = client_socket.recv(20)
-        if context.number_of_tuples_recv == 0:
-            context.first_tuple_recv_timestamp = time.perf_counter()
 
         if len(data) == 0:
-            context.last_tuple_recv_timestamp = time.perf_counter()
             context.logger.info("Receiving Done!")
             break
+
+        if context.number_of_tuples_recv % scale // 10 == 0:
+            context.tuples_received_timestamps.append(time.perf_counter())
 
         context.number_of_tuples_recv += 1
 
 
-def test_tuple_throughput_receiver(context: TestContext):
+def test_tuple_throughput_receiver(context: TestContext, scale):
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -190,10 +216,10 @@ def test_tuple_throughput_receiver(context: TestContext):
     context.logger.info(f"Receiver: Accepted a connection from {client_address}")
 
     # Handle the client's request
-    handle_client_receiver(server_socket, context)
+    handle_client_receiver(server_socket, context, scale)
 
 
-def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, socket_opts=True):
+def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, socket_opts=False):
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -231,23 +257,32 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
 
 def test_gcp(image_name: str, logger: logging.Logger, data, delay, scale=100, ramp_factor=1.05):
     context = TestContext(logger)
+    context.logger.info(f"Starting Test: {context.test_id}")
     try:
         pre_init_pac_sent, pre_init_pac_recv, pre_init_dropin, pre_init_dropout = get_current_packet_loss()
         boot_test = threading.Thread(target=test_boot_time, args=(context, image_name, launch_gcp))
         tuple_throughput_test = threading.Thread(target=test_tuple_throughput,
                                                  args=(context, data, delay, scale, ramp_factor))
         tuple_throughput_test_receiver = threading.Thread(target=test_tuple_throughput_receiver,
-                                                          args=(context,))
+                                                          args=(context, scale))
 
         tuple_throughput_test.start()
         tuple_throughput_test_receiver.start()
         boot_test.start()
 
-        boot_test.join(30)
-        tuple_throughput_test.join(30)
-        tuple_throughput_test_receiver.join(5)
+        boot_test.join()
+        tuple_throughput_test.join()
+        tuple_throughput_test_receiver.join()
 
         fin_pac_sent, fin_pac_recv, fin_dropin, fin_dropout = get_current_packet_loss()
+
+        context.packets_during_setup = (
+            context.init_stats[0] - pre_init_pac_sent, context.init_stats[1] - pre_init_pac_recv,
+            context.init_stats[2] - pre_init_dropin, context.init_stats[3] - pre_init_dropout)
+
+        context.packets_during_evaluation = (
+            fin_pac_sent - context.init_stats[0], fin_pac_recv - context.init_stats[1],
+            fin_dropin - context.init_stats[2], fin_dropout - context.init_stats[3])
 
         logger.info(
             f"Packets Sent during setup: {context.init_stats[0] - pre_init_pac_sent} / Received: {context.init_stats[1] - pre_init_pac_recv}")
@@ -258,9 +293,9 @@ def test_gcp(image_name: str, logger: logging.Logger, data, delay, scale=100, ra
         logger.info(
             f"Packet-Loss In: {fin_dropin - context.init_stats[2]} / Out: {fin_dropout - context.init_stats[3]}")
 
-        latency_first_first = context.first_tuple_recv_timestamp - context.first_tuple_sent_timestamp
-        latency_last_last = context.last_tuple_recv_timestamp - context.last_tuple_sent_timestamp
-        total = context.last_tuple_recv_timestamp - context.first_tuple_sent_timestamp
+        latency_first_first = context.tuples_received_timestamps[0] - context.tuples_send_timestamps[0]
+
+        total = context.tuples_received_timestamps[-1] - context.tuples_send_timestamps[0]
 
         logger.info(
             "\n".join([
@@ -270,12 +305,12 @@ def test_gcp(image_name: str, logger: logging.Logger, data, delay, scale=100, ra
                 f"Number of Tuples received: {context.number_of_tuples_recv}",
                 f"Total Time: {total}s. TPS of {context.number_of_tuples_sent / total}",
                 f"First Tuple Latency: {latency_first_first}s",
-                f"Last Tuple Latency: {latency_last_last}s",
             ])
         )
 
         if tuple_throughput_test.is_alive():
             raise ExperimentFailedException("Timeout")
 
+        return context
     finally:
         context.clean_up()

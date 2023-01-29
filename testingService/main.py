@@ -8,6 +8,8 @@ from google.cloud import firestore, storage
 # Imports the Google Cloud client library
 from google.cloud import pubsub_v1
 
+from experiments.gcp_experiment import TestContext
+
 logger = logging.getLogger("Logger")
 logger.setLevel(logging.DEBUG)
 # Create a console handler
@@ -72,15 +74,57 @@ def callback(message):
         datasetId = message['datasetId']
         evaluationId = message['evaluationId']
         delay = float(message['delay'])
-        imageName = message['imageName']
+        image_name = message['imageName']
         scale = message['scale']
-        rampFactor = message['rampFactor']
+        ramp_factor = message['rampFactor']
 
         data = downloadDataset(datasetId)
 
         from experiments.gcp_experiment import test_gcp
-        test_gcp(imageName, logger, data, delay, scale, rampFactor)
+        context = test_gcp(image_name, logger, data, delay, scale, ramp_factor)
 
+        if context is None:
+            raise "Experiment Failed"
+
+        store_evaluation(context, {
+            "image_name": image_name,
+            "scale": scale,
+            "delay": delay,
+            "ramp_factor": ramp_factor,
+            "dataset_id": datasetId
+        })
+
+
+def store_evaluation(context: TestContext, parameters):
+    evaluation_data = {
+        "number_of_tuples_sent": context.number_of_tuples_sent,
+        "number_of_expected_tuples": context.number_of_expected_tuples,
+        "number_of_tuples_recv": context.number_of_tuples_recv,
+        "tuples_send_timestamps": context.tuples_send_timestamps,
+        "tuples_received_timestamps": context.tuples_received_timestamps,
+        "uut_serial": context.uut_serial_log,
+        "packets_during_setup": {
+            "sent": context.packets_during_setup[0],
+            "received": context.packets_during_setup[1],
+            "dropin": context.packets_during_setup[2],
+            "dropout": context.packets_during_setup[3],
+        },
+        "packets_during_evaluation": {
+            "sent": context.packets_during_evaluation[0],
+            "received": context.packets_during_evaluation[1],
+            "dropin": context.packets_during_evaluation[2],
+            "dropout": context.packets_during_evaluation[3],
+        }
+    }
+
+    # Create a Firestore client
+    db = firestore.Client()
+    # Create a new document in the "datasets" collection
+    evaluation_collection = db.collection("evaluations")
+    evaluation_collection.add(
+        {"created": datetime.datetime.now(), 'data': evaluation_data, 'parameters': parameters}, str(context.test_id))
+
+    context.logger.info(f"Evalutation was saved in Firestore: /evalutations/{context.test_id}")
 
 # Your Google Cloud project ID
 projectId = "bdspro"
