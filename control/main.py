@@ -2,6 +2,7 @@ import time
 import LoggingFunctions as log
 from google.cloud import pubsub_v1
 import ControlFunctions as control
+import json
 
 # create Logger
 logger = log.createLogger()
@@ -10,15 +11,16 @@ logger = log.createLogger()
 def callback(message):
     message.ack()
     serviceType = message.attributes['serviceType']
+    logger.info('Received serviceType Request: {}'.format(serviceType))
+
+    messageData = json.loads(message.data.decode('utf-8'))
 
     if(serviceType == 'startExperiment'):
         logger.info("Start new experiment")
-        control.startExperiment(message, logger)
+        control.startExperiment(messageData, logger)
     else:
         print('Unknown serviceType: {}'.format(serviceType))
         logger.error('Unknown serviceType: {}'.format(serviceType))
-
-    print("Received message: {}".format(message))
 
 # Your Google Cloud project ID
 projectId = "bdspro"
