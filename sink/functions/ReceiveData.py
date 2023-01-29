@@ -10,12 +10,13 @@ def handleClient(client_socket, logger):
     
     while True:
         data = client_socket.recv(20)
+        
+        if not data:
+            logger.info("Connection closed or no more data to be received")
+            break
+        
         logger.info("Received data package")
         tuples.append(struct.unpack('!5i', data))
-
-        if len(data) == 0:
-            # context.logger.info("Receiving Done!")
-            break
 
         #if context.number_of_tuples_recv % scale // 10 == 0:
         #    context.tuples_received_timestamps.append(time.perf_counter())
