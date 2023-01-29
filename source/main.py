@@ -9,25 +9,24 @@ import LoggingFunctions as log
 
 logger = log.createLogger()
 
-
 # use the subscriber client to create a subscription and a callback
 def callback(message):
     message.ack()
     serviceType = message.attributes['serviceType']
+    logger.error('Received serviceType Request: {}'.format(serviceType))
 
     messageData = json.loads(message.data.decode('utf-8'))
 
     if(serviceType == 'generateDataset'):
-        logger.info("Generate new dataset")
+        logger.info("Starting: generateDataset")
         gd.generateDataset(messageData, logger)
     elif(serviceType == 'createEvaluation'):
-        logger.info("Create new evaluation")
+        logger.info("Starting: createEvaluation")
         ce.createEvaluation(messageData, logger)
     elif(serviceType == 'sendData'):
-        logger.info("Send data to Unikernel")
+        logger.info("Starting: sendData")
         sd.sendData(messageData, logger)
     else:
-        print('Unknown serviceType: {}'.format(serviceType))
         logger.error('Unknown serviceType: {}'.format(serviceType))
 
     # message.datasetId
@@ -62,7 +61,7 @@ subscriptionPath = subscriber.subscription_path(projectId, subscriptionName)
 # subscribe to the subscription
 future = subscriber.subscribe(subscriptionPath, callback)
 
-print("Listening for messages on {}...".format(subscriptionPath))
+logger.info("Listening for messages on {}...".format(subscriptionPath))
 
 # keep the main thread from exiting
 try:

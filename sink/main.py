@@ -55,6 +55,7 @@ subscriptionPath = subscriber.subscription_path(projectId, subscriptionName)
 future = subscriber.subscribe(subscriptionPath, callback)
 
 print("Listening for messages on {}...".format(subscriptionPath))
+logger.info("Listening for messages on {}...".format(subscriptionPath))
 
 # keep the main thread from exiting
 try:

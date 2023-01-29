@@ -1,0 +1,2 @@
+class CustomTestError(Exception):
+    pass
