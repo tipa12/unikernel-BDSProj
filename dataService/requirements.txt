@@ -1,7 +1,0 @@
-google-api-core==2.11.0
-google-cloud==0.34.0
-google-cloud-compute==1.8.0
-google-cloud-core==2.3.2
-google-cloud-firestore==2.7.3
-google-cloud-storage==2.7.0
-google-cloud-pubsub==2.13.12
