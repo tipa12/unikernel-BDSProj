@@ -92,7 +92,7 @@ def createFirestoreDocument(collection, documentId, setDict):
     # Set the data for the document
     docRef.set(setDict)
 
-def sendToMessageBroker(topicName, data, functionName):
+def sendToMessageBroker(topicName, data, attributes={}):
     # function expects a json object as data
 
     # Google Cloud project ID
@@ -105,7 +105,7 @@ def sendToMessageBroker(topicName, data, functionName):
 
     # Publish the message
     topic_path = publisher.topic_path(projectId, topicName)
-    publisher.publish(topic_path, data=data.encode('utf-8'), functionName=functionName)
+    publisher.publish(topic_path, data=data.encode('utf-8'), **attributes)
 
 """ @app.route('/start/gcp/<image_name>')
 def start_gcp(image_name: str):
@@ -238,14 +238,12 @@ def newExperimentEndpoint():
         "imageName": imageName
     }
 
-    createFirestoreDocument('experiments', experimentId, experimentMetaDict)
-
     # Send data to control instance
     controlTopicName = "controlPipeline"
 
     controlPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
 
-    sendToMessageBroker(controlTopicName, controlPipelineMessage)
+    sendToMessageBroker(controlTopicName, controlPipelineMessage, {'serviceType': 'startExperiment'})
 
     # Send data to source instance
     sourceTopicName = "sourcePipeline"
@@ -253,7 +251,7 @@ def newExperimentEndpoint():
     sourcePipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
     sourcePipelineMessage['port'] = 8081
 
-    sendToMessageBroker(sourceTopicName, sourcePipelineMessage)
+    sendToMessageBroker(sourceTopicName, sourcePipelineMessage, {'serviceType': 'sendData'})
 
     # Send data to sink instance
     sinkTopicName = "sinkPipeline"
@@ -261,7 +259,9 @@ def newExperimentEndpoint():
     sinkPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
     sinkPipelineMessage['port'] = 8081
 
-    sendToMessageBroker(sinkTopicName, sinkPipelineMessage)
+    sendToMessageBroker(sinkTopicName, sinkPipelineMessage, {'serviceType': 'receiveData'})
+
+    createFirestoreDocument('experiments', experimentId, experimentMetaDict)
 
     #return datasetId, evaluationId, parameters
     response = {

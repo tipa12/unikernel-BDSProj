@@ -1,7 +1,7 @@
 import socket
 import time
 
-PORT = 8081
+PORT = 8082
 
 def handleClient(client_socket, logger):
     logger.info("Get data from client")
@@ -20,6 +20,7 @@ def handleClient(client_socket, logger):
         #recv something
         try:
             data = client_socket.recv(8192)
+            logger.info("Received a data package!")
             if data:
                 # total_data.append(data)
                 #change the beginning time for measurement
@@ -44,6 +45,7 @@ def receiveData(messageData, logger):
 
     # Accept a single incoming connection
     client_socket, client_address = server_socket.accept()
+    logger.info(f"Accepted a connection from {client_address}")
     print(f"Accepted a connection from {client_address}")
 
     # Handle the client's request
