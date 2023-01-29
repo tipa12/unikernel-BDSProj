@@ -15,7 +15,7 @@ from google.cloud import compute_v1
 
 # from dataService.launcher.gcp_launcher import create_from_custom_image
 
-PORT = 8080
+PORT = 8081
 
 def get_image_from_family(project: str, family: str) -> compute_v1.Image:
     """

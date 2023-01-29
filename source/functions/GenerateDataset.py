@@ -8,7 +8,7 @@ def measure_time(func):
         start = timeit.default_timer()
         result = func(*args, **kwargs)
         end = timeit.default_timer()
-        print(f"Time taken: {end - start:.6f} seconds")
+        print(f"Time taken to generate Dataset: {end - start:.6f} seconds")
         return result
     return wrapper
 

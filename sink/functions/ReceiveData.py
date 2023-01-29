@@ -1,7 +1,7 @@
 import socket
 import time
 
-PORT = 8082
+PORT = 8081
 
 def handleClient(client_socket, logger):
     logger.info("Get data from client")

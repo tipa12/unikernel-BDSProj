@@ -13,7 +13,7 @@ logger = log.createLogger()
 def callback(message):
     message.ack()
     serviceType = message.attributes['serviceType']
-    logger.error('Received serviceType Request: {}'.format(serviceType))
+    logger.info('Received serviceType Request: {}'.format(serviceType))
 
     messageData = json.loads(message.data.decode('utf-8'))
 

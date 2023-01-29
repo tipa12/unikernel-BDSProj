@@ -4,7 +4,7 @@ import threading
 import time
 import CustomGoogleCloudStorage as gcs
 
-PORT = 8080
+PORT = 8081
 
 def handle_client(data, delay, client_socket, iterations, logger):
     lengthOfData = len(data)
