@@ -15,7 +15,7 @@ from google.cloud import compute_v1
 
 # from dataService.launcher.gcp_launcher import create_from_custom_image
 
-PORT = 8081
+PORT = 8080
 
 def get_image_from_family(project: str, family: str) -> compute_v1.Image:
     """
@@ -300,6 +300,7 @@ def receive_udp_packet(q: queue.Queue, logger):
     data, addr = sock.recvfrom(1024)
     q.put(time.perf_counter())
     logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
+    logger.info(f"Received Boot Packet. Data = {data}, Addr = {addr}")
 
 
 def boot_image(image_name: str, logger):
