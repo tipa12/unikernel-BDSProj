@@ -39,9 +39,9 @@ RUN apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install MirageOS
 RUN opam init --auto-setup --yes
-
+RUN opam switch create 4.14.0
 RUN opam update -y
-RUN opam install -y 'mirage>4' ocaml-lsp-server
+RUN opam install -y 'mirage>4' ocaml-lsp-server ocamlformat ppx_cstruct
 
 RUN opam clean -a -c -s --logs
 
