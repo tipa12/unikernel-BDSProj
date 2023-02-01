@@ -44,12 +44,14 @@ UNIQUE_ID=$(
 )
 
 WORKDIR=$(pwd)/scripts/workdir
-export UK_WORKDIR=WORKDIR
+export UK_WORKDIR=$WORKDIR
 
 PROJECT_DIR=$(mktemp -d)
 echo "Cloning repository..."
 (cd "$PROJECT_DIR" && git clone https://oauth2:${GITHUB_TOKEN}@github.com/tipa12/unikernel-BDSProj.git)
-WORKDIR=$PROJECT_DIR/unikernel-BDSProj/unikraft/unikernel
+
+WORKDIR=$WORKDIR/apps/unikernel
+cp -r "$PROJECT_DIR/unikernel-BDSProj/unikraft/unikernel/" "$WORKDIR"
 
 if [ ${#CONFIGURE_ARGS[@]} -eq 0 ]; then
   echo "Configuring Unikraft application..." "${CONFIGURE_ARGS[@]}"
