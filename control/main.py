@@ -17,6 +17,7 @@ def callback(message):
 
     if(serviceType == 'startExperiment'):
         logger.info("Start new experiment")
+        # TODO Disable start of experiment when one is already running
         control.startExperiment(messageData, logger)
     else:
         print('Unknown serviceType: {}'.format(serviceType))

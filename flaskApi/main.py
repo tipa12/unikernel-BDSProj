@@ -118,9 +118,17 @@ def newExperimentEndpoint():
 
     datasetId = request.args.get('datasetId')
     evaluationId = request.args.get('evaluationId')
-    delay = float(request.args.get('delay'))
-    iterations = int(request.args.get('iterations'))
     imageName = request.args.get('imageName')
+    githubToken = request.args.get('githubToken')
+    sourceAddress = request.args.get('sourceAddress', None)
+    sourcePort = int(request.args.get('sourcePort', None))
+    sinkAddress = request.args.get('sinkAddress', None)
+    sinkPort = int(request.args.get('sinkPort', None))
+    controlAddress = request.args.get('controlAddress', None)
+    controlPort = int(request.args.get('controlPort', None))
+    operator = request.args.get('operator', 'identity')
+    delay = float(request.args.get('delay', 0.1))
+    iterations = int(request.args.get('iterations', 100))
 
     experimentId = uid.generateUniqueExperimentId()
 
@@ -130,7 +138,15 @@ def newExperimentEndpoint():
         "evaluationId": evaluationId,
         "delay": delay,
         "iterations": iterations,
-        "imageName": imageName
+        "imageName": imageName,
+        'sourceAddress': sourceAddress,
+        'sourcePort': sourcePort,
+        'sinkAddress': sinkAddress,
+        'sinkPort': sinkPort,
+        'controlAddress': controlAddress,
+        'controlPort': controlPort,
+        'githubToken': githubToken,
+        'operator': operator
     }
 
     # Send data to control instance
