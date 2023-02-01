@@ -1,0 +1,48 @@
+### App configuration
+config APPTESTOPERATOR_SOURCE_ADDR
+	string "IP Address of the tuple source"
+	default "10.156.0.54"
+	help
+	  Source IP Address of the tuple source
+
+config APPTESTOPERATOR_SOURCE_PORT
+	int "PORT of the tuple source"
+	default "8081"
+	help
+	  Port of the tuple source
+
+config APPTESTOPERATOR_DESTINATION_ADDR
+	string "IP Address of the tuple source"
+	default "10.156.0.56"
+	help
+	  Destination IP Address of the tuple source
+
+config APPTESTOPERATOR_DESTINATION_PORT
+	int "PORT of the tuple source"
+	default "8081"
+	help
+	  Port of the tuple source
+
+config APPTESTOPERATOR_TESTBENCH_ADDR
+	string "IP Address of the testbench"
+	default "10.156.0.52"
+	help
+	  Source IP Address of the testbench
+
+config APPTESTOPERATOR_TESTBENCH_PORT
+	int "Port of the testbench"
+	default "8081"
+	help
+	  Port of the testbench
+
+config NETWORK_PERFORMANCE_EVALUATION
+	bool "disables logging in the ipc handler"
+	default n
+	help
+		disables logging in the ipc handler
+
+config APPTESTOPERATOR_DBG_SHOW_TUPLES
+	bool "Print Tuples"
+	default n
+	help
+	  enables debug output of received tuples

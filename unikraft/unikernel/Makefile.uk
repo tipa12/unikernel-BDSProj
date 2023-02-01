@@ -1,0 +1,3 @@
+$(eval $(call addlib,apptestoperator))
+
+APPTESTOPERATOR_SRCS-y += $(APPTESTOPERATOR_BASE)/main.c
