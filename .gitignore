@@ -40,10 +40,12 @@ ncscope.*
 
 # MirageOS
 
-MirageOS/_build
-MirageOS/dist
-MirageOS/duniverse
-MirageOS/mirage
+MirageOS/*/_build
+MirageOS/*/dist
+MirageOS/*/duniverse
+MirageOS/*/mirage
+MirageOS/*/dune*
+MirageOS/*/Makefile
 
 # MirageOS
 
