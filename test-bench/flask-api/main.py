@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 from google.cloud import pubsub_v1
 import json
 import CustomGoogleCloudStorage  as gcs
