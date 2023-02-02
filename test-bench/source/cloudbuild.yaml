@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/source-instance', '-f', 'source/Dockerfile', './source']
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/source-instance', '-f', './test-bench/source/Dockerfile', './test-bench']
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/$PROJECT_ID/source-instance']
 - name: 'gcr.io/cloud-builders/gcloud'

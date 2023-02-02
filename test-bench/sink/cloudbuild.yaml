@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/sink-instance', '-f', 'sink/Dockerfile', './sink']
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/sink-instance', '-f', './test-bench/sink/Dockerfile', './test-bench']
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/$PROJECT_ID/sink-instance']
 - name: 'gcr.io/cloud-builders/gcloud'
