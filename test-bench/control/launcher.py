@@ -1,10 +1,3 @@
-import logging
-import queue
-import socket
-import threading
-import time
-import uuid
-import struct
 import re
 import sys
 from typing import Any, List
@@ -13,18 +6,13 @@ import warnings
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
 
-# from dataService.launcher.gcp_launcher import create_from_custom_image
-
-PORT = 8081
 
 def get_image_from_family(project: str, family: str) -> compute_v1.Image:
     """
     Retrieve the newest image that is part of a given family in a project.
-
     Args:
         project: project ID or project number of the Cloud project you want to get image from.
         family: name of the image family you want to get image from.
-
     Returns:
         An Image object.
     """
@@ -44,7 +32,6 @@ def disk_from_image(
     """
     Create an AttachedDisk object to be used in VM instance creation. Uses an image as the
     source for the new disk.
-
     Args:
          disk_type: the type of disk you want to create. This value uses the following format:
             "zones/{zone}/diskTypes/(pd-standard|pd-ssd|pd-balanced|pd-extreme)".
@@ -55,7 +42,6 @@ def disk_from_image(
             of the publicly available images or an image from one of your projects.
             This value uses the following format: "projects/{project_name}/global/images/{image_name}"
         auto_delete: boolean flag indicating whether this disk should be deleted with the VM that uses it
-
     Returns:
         AttachedDisk object configured to be created using the specified image.
     """
@@ -81,22 +67,18 @@ def wait_for_extended_operation(
     If the operation ends with an error, an exception will be raised.
     If there were any warnings during the execution of the operation
     they will be printed to sys.stderr.
-
     Args:
         operation: a long-running operation you want to wait on.
         verbose_name: (optional) a more verbose name of the operation,
             used only during error and warning reporting.
         timeout: how long (in seconds) to wait for operation to finish.
             If None, wait indefinitely.
-
     Returns:
         Whatever the operation.result() returns.
-
     Raises:
         This method will raise the exception received from `operation.exception()`
         or RuntimeError if there is no exception set, but there is an `error_code`
         set for the `operation`.
-
         In case of an operation taking longer than `timeout` seconds to complete,
         a `concurrent.futures.TimeoutError` will be raised.
     """
@@ -139,7 +121,6 @@ def create_instance(
 ) -> compute_v1.Instance:
     """
     Send an instance creation request to the Compute Engine API and wait for it to complete.
-
     Args:
         project_id: project ID or project number of the Cloud project you want to use.
         zone: name of the zone to create the instance in. For example: "us-west3-b"
@@ -256,14 +237,12 @@ def create_from_custom_image(
 ) -> compute_v1.Instance:
     """
     Create a new VM instance with custom image used as its boot disk.
-
     Args:
         project_id: project ID or project number of the Cloud project you want to use.
         zone: name of the zone to create the instance in. For example: "us-west3-b"
         instance_name: name of the new virtual machine (VM) instance.
         custom_image_link: link to the custom image you want to use in the form of:
             "projects/{project_name}/global/images/{image_name}"
-
     Returns:
         Instance object.
     """
@@ -273,47 +252,15 @@ def create_from_custom_image(
     return instance
 
 
-class ExperimentFailedException(Exception):
-    pass
+def delete_instance(
+        project_id: str, zone: str, instance_name: str
+):
+    instance_client = compute_v1.InstancesClient()
+    instance_client.delete(project=project_id, zone=zone, instance=instance_name)
 
 
-def launch_gcp(image_name: str, logger):
-    # Send an HTTP request using the requests library
-    project = 'bdspro'
-    zone = 'europe-west3-a'
-    test_id = uuid.uuid4()
-    framework = "unikraft"
-
-    start = time.perf_counter()
-    response = create_from_custom_image(project, zone, f"{framework}-{test_id}",
-                                        f"projects/bdspro/global/images/{image_name}")
-
-    logger.info(f"GCP Instance Creation Request response:\n{response}")
-    return start
-
-
-def receive_udp_packet(q: queue.Queue, logger):
-    # Create a UDP socket and listen for incoming packets
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('0.0.0.0', PORT))
-    # TODO: Verify data and addr
-    data, addr = sock.recvfrom(1024)
-    q.put(time.perf_counter())
-    logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
-    logger.info(f"Received Boot Packet. Data = {data}, Addr = {addr}")
-
-
-def boot_image(image_name: str, logger):
-    q = queue.Queue()
-    udp_thread = threading.Thread(target=receive_udp_packet, args=(q, logger))
-    udp_thread.start()
-    start = launch_gcp(image_name, logger)
-    udp_thread.join(30)
-    if udp_thread.is_alive():
-        logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
-        raise ExperimentFailedException("Boot Packet Timeout")
-
-    stop = q.get(False)
-    logger.info(f"Unikernel Booted in {stop - start}ms.")
-    return stop - start
-
+def print_serial_output(
+    project_id: str, zone: str, instance_name: str
+) -> str:
+    instance_client = compute_v1.InstancesClient()
+    return instance_client.get_serial_port_output(project=project_id, zone=zone, instance=instance_name).contents

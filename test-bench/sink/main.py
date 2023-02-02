@@ -2,41 +2,47 @@
 from google.cloud import pubsub_v1
 import time
 import json
-import functions.GenerateDataset as gd
-import functions.CreateEvaluation as ce
-import functions.SendData as sd
-import LoggingFunctions as log
+import ReceiveData as rd
+import common.LoggingFunctions as log
 
 logger = log.createLogger()
+
 
 # use the subscriber client to create a subscription and a callback
 def callback(message):
     message.ack()
-    serviceType = message.attributes['serviceType']
-    logger.info('Received serviceType Request: {}'.format(serviceType))
+    service_type = message.attributes['serviceType']
 
-    messageData = json.loads(message.data.decode('utf-8'))
+    message_data = json.loads(message.data.decode('utf-8'))
 
-    if(serviceType == 'generateDataset'):
-        logger.info("Starting: generateDataset")
-        gd.generateDataset(messageData, logger)
-    elif(serviceType == 'createEvaluation'):
-        logger.info("Starting: createEvaluation")
-        ce.createEvaluation(messageData, logger)
-    elif(serviceType == 'sendData'):
-        logger.info("Starting: sendData")
-        sd.sendData(messageData, logger)
+    if service_type == 'receiveData':
+        logger.info("Wait for data from Unikernel")
+        rd.receive_data(message_data, logger)
+    elif service_type == 'abort':
+        rd.abort_current_experiment()
     else:
-        logger.error('Unknown serviceType: {}'.format(serviceType))
+        print('Unknown serviceType: {}'.format(service_type))
+        logger.error('Unknown serviceType: {}'.format(service_type))
+
+    # message.datasetId
+
+    # message.evaluationId
+
+    # wie viele tuples
+
+    # funktion von unikernel
+
+    # adresse + port von evaluationService
+
 
 # Your Google Cloud project ID
 projectId = "bdspro"
 
 # The name of the Pub/Sub topic
-topicName = "sourcePipeline"
+topicName = "sinkPipeline"
 
 # The name of the subscription
-subscriptionName = "sourcePipeline-sub"
+subscriptionName = "sinkPipeline-sub"
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()
@@ -50,6 +56,7 @@ subscriptionPath = subscriber.subscription_path(projectId, subscriptionName)
 # subscribe to the subscription
 future = subscriber.subscribe(subscriptionPath, callback)
 
+print("Listening for messages on {}...".format(subscriptionPath))
 logger.info("Listening for messages on {}...".format(subscriptionPath))
 
 # keep the main thread from exiting

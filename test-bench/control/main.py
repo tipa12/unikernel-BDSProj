@@ -1,5 +1,5 @@
 import time
-import LoggingFunctions as log
+import common.LoggingFunctions as log
 from google.cloud import pubsub_v1
 import ControlFunctions as control
 import json
@@ -7,20 +7,22 @@ import json
 # create Logger
 logger = log.createLogger()
 
+
 # use the subscriber client to create a subscription and a callback
 def callback(message):
     message.ack()
-    serviceType = message.attributes['serviceType']
-    logger.info('Received serviceType Request: {}'.format(serviceType))
+    service_type = message.attributes['serviceType']
+    logger.info('Received serviceType Request: {}'.format(service_type))
 
-    messageData = json.loads(message.data.decode('utf-8'))
+    message_data = json.loads(message.data.decode('utf-8'))
 
-    if(serviceType == 'startExperiment'):
+    if service_type == 'startExperiment':
         logger.info("Start new experiment")
-        control.startExperiment(messageData, logger)
+        control.start_experiment(message_data, logger)
     else:
-        print('Unknown serviceType: {}'.format(serviceType))
-        logger.error('Unknown serviceType: {}'.format(serviceType))
+        print('Unknown serviceType: {}'.format(service_type))
+        logger.error('Unknown serviceType: {}'.format(service_type))
+
 
 # Your Google Cloud project ID
 projectId = "bdspro"
@@ -28,7 +30,6 @@ projectId = "bdspro"
 topicName = "controlPipeline"
 # The name of the subscription
 subscriptionName = "controlPipeline-sub"
-
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()

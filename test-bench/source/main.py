@@ -1,9 +1,11 @@
 # Imports the Google Cloud client library
-from google.cloud import pubsub_v1
-import time
 import json
-import functions.ReceiveData as rd
-import LoggingFunctions as log
+import time
+
+from google.cloud import pubsub_v1
+
+from common import LoggingFunctions as log
+import source.SendData as sd
 
 logger = log.createLogger()
 
@@ -11,36 +13,28 @@ logger = log.createLogger()
 # use the subscriber client to create a subscription and a callback
 def callback(message):
     message.ack()
-    serviceType = message.attributes['serviceType']
+    service_type = message.attributes['serviceType']
+    logger.info('Received serviceType Request: {}'.format(service_type))
 
-    messageData = json.loads(message.data.decode('utf-8'))
+    message_data = json.loads(message.data.decode('utf-8'))
 
-    if(serviceType == 'receiveData'):
-        logger.info("Wait for data from Unikernel")
-        rd.receiveData(messageData, logger)
+    if service_type == 'sendData':
+        logger.info("Starting: sendData")
+        sd.send_data(message_data, logger)
+    elif service_type == 'abort':
+        sd.abort_current_experiment()
     else:
-        print('Unknown serviceType: {}'.format(serviceType))
-        logger.error('Unknown serviceType: {}'.format(serviceType))
-
-    # message.datasetId
-
-    # message.evaluationId
-
-    # wie viele tuples
-
-    # funktion von unikernel
-    
-    # adresse + port von evaluationService
+        logger.error('Unknown serviceType: {}'.format(service_type))
 
 
 # Your Google Cloud project ID
 projectId = "bdspro"
 
 # The name of the Pub/Sub topic
-topicName = "sinkPipeline"
+topicName = "sourcePipeline"
 
 # The name of the subscription
-subscriptionName = "sinkPipeline-sub"
+subscriptionName = "sourcePipeline-sub"
 
 # create a subscriber client
 subscriber = pubsub_v1.SubscriberClient()
@@ -54,7 +48,6 @@ subscriptionPath = subscriber.subscription_path(projectId, subscriptionName)
 # subscribe to the subscription
 future = subscriber.subscribe(subscriptionPath, callback)
 
-print("Listening for messages on {}...".format(subscriptionPath))
 logger.info("Listening for messages on {}...".format(subscriptionPath))
 
 # keep the main thread from exiting
