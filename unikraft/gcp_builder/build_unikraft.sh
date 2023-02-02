@@ -2,6 +2,13 @@
 set -x
 set -e # Abort on failure
 
+function finish {
+  echo "Deleting instance"
+  gcloud compute instances delete --zone "$ZONE" --project "$PROJECT_ID" "$HOSTNAME"
+}
+
+trap finish EXIT
+
 # Set default values for the arguments
 NAME=""
 REPLACE=false
@@ -76,4 +83,5 @@ if [ -z "$REPLACE" ]; then
 else
   gcloud compute images -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 fi
+
 echo "Done."
