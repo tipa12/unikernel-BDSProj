@@ -4,8 +4,9 @@
 
 import logging
 
-def createLogger():
-    logger = logging.getLogger("Logger")
+
+def create_logger(logger_name: str):
+    logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)
     # Create a console handler
     console_handler = logging.StreamHandler()

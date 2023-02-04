@@ -4,11 +4,11 @@ import time
 
 from google.cloud import pubsub_v1
 
-from testbench.common.LoggingFunctions import createLogger
+from testbench.common.LoggingFunctions import create_logger
 import SendData as sd
 from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_source
 
-logger = createLogger()
+logger = create_logger('source')
 
 
 # use the subscriber client to create a subscription and a callback

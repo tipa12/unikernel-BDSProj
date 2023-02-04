@@ -6,7 +6,7 @@ import testbench.common.LoggingFunctions as log
 # create Logger
 from testbench.common.messages import subscribe_control, AbortExperimentMessage, StartExperimentMessage, \
     ResponseMeasurementsMessage
-logger = log.createLogger()
+logger = log.create_logger("control")
 
 
 # use the subscriber client to create a subscription and a callback

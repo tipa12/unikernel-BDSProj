@@ -1,11 +1,11 @@
 # Imports the Google Cloud client library
 import time
 
-from testbench.common.LoggingFunctions import createLogger
+from testbench.common.LoggingFunctions import create_logger
 import ReceiveData as rd
 from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_sink
 
-logger = createLogger()
+logger = create_logger('sink')
 
 
 # use the subscriber client to create a subscription and a callback

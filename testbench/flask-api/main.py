@@ -6,7 +6,7 @@ from testbench.common.messages import abort_experiment, start_experiment
 
 app = Flask(__name__)
 
-logger = log.createLogger()
+logger = log.create_logger('flask-api')
 
 @app.route('/')
 def root():
