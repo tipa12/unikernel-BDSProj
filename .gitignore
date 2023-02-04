@@ -25,6 +25,7 @@
 !.gitignore
 .*
 !.dockerignore
+!.gcloudignore
 /a.out
 /app-bdspro/build
 
@@ -53,10 +54,5 @@ _build
 dist
 duniverse
 
-
-# Testbench
-
-Testbench/venv
-Testbench/unikernel.log
-
-dataService/venv
+.history
+venv
