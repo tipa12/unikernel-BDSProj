@@ -29,6 +29,8 @@ class TestContext:
         self.tuple_timestamps = []
         self.number_of_tuples_sent = 0
         self.number_of_tuples_passing_the_filter = 0
+        self.start_timestamp: float | None = None
+        self.stop_timestamp: float | None = None
 
         self.logger = logger
 
@@ -39,6 +41,8 @@ class TestContext:
             "tuples_sent_timestamps": self.tuple_timestamps,
             "number_of_tuples_sent": self.number_of_tuples_sent,
             "number_of_tuples_passing_the_filter": self.number_of_tuples_passing_the_filter,
+            "start_timestamp": self.start_timestamp,
+            "stop_timestamp": self.stop_timestamp,
             "packets": vars(self.diff_packet_stats),
         }
 
@@ -48,23 +52,35 @@ class TestContext:
 
 
 def handle_client(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
-                  ramp_factor: float):
-    start_message = client_socket.recv(len("SEND TUPLES!"))
-    assert start_message == b"SEND TUPLES!"
+                  ramp_factor: float, packet_length=4):
+    if len(data) % packet_length != 0:
+        context.logger.warning("Size of dataset is not divisible by packet length, dataset will be truncated")
+        data = data[:(len(data) // packet_length) * packet_length]
 
-    # Send data to the client at an increasing rate
-    client_socket.setblocking(False)
+    struct_string = f"!{5 * packet_length}i"
 
-    time_stamp = time.perf_counter()
     number_of_tuples = 0
     total = len(data) * scale
 
+    start_message = client_socket.recv(len("SEND TUPLES!"))
+    assert start_message == b"SEND TUPLES!"
+    client_socket.setblocking(False)
+    context.start_timestamp = time.perf_counter()
+    time_stamp = time.perf_counter()
+
     for _ in range(scale):
-        for data_tuple in data:
-            data_tuple = (data_tuple[0], context.number_of_tuples_sent, data_tuple[2], data_tuple[3], data_tuple[4])
+        for i in range(0, len(data), packet_length):
+
+            passing = [data[i + pi][0] > 0 for pi in range(packet_length)]
+
+            data_tuple = [
+                [data[i + pi][0], context.number_of_tuples_sent + pi, data[i + pi][2], data[i + pi][3], data[i + pi][4]]
+                for pi in range(packet_length)]
+
+            packet = [item for sub_list in data_tuple for item in sub_list]
 
             # pack the values into a byte string
-            packed_data = struct.pack('!5i', *data_tuple)
+            packed_data = struct.pack(struct_string, *packet)
 
             # Non-Blocking send
             # use downtime to log TPS
@@ -94,13 +110,14 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
                     else:
                         context.logger.warning(f"Blocking Counter: {counter}")
 
-            context.number_of_tuples_sent += 1
+            context.number_of_tuples_sent += packet_length
 
-            if data_tuple[0] > 0:
-                if context.number_of_tuples_passing_the_filter % scale // 10 == 0:
-                    context.tuple_timestamps.append(time.perf_counter())
+            for p in passing:
+                if p:
+                    if context.number_of_tuples_passing_the_filter % scale // 10 == 0:
+                        context.tuple_timestamps.append(time.perf_counter())
 
-                context.number_of_tuples_passing_the_filter += 1
+                    context.number_of_tuples_passing_the_filter += 1
 
             # Decrease the delay time - comment out to send data at a constant rate
             delay *= 1 / ramp_factor
@@ -117,6 +134,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
     client_socket.setblocking(True)
     client_socket.send(b"DONE")
     ack_message = client_socket.recv(4)
+    context.stop_timestamp = time.perf_counter()
     context.logger.info("Waiting for ACK")
     context.logger.info(f"{ack_message}")
     assert ack_message == b"ACK"
