@@ -57,6 +57,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
 
     time_stamp = time.perf_counter()
     number_of_tuples = 0
+    total = len(data) * scale
 
     for _ in range(scale):
         for data_tuple in data:
@@ -80,11 +81,18 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
                         delta = time_stamp - delta
                         tuples_send_in_delta = context.number_of_tuples_sent - number_of_tuples
                         number_of_tuples = context.number_of_tuples_sent
-                        context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
+                        context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s")
+                        context.logger.info(f"{100 * context.number_of_tuples_sent / total}% done")
 
-                    counter += 1
+                    if context.stop_event.is_set():
+                        raise ExperimentAbortedException()
+
                     time.sleep(repeat_if_blocking_delay)
-                    repeat_if_blocking_delay *= 2
+                    counter += 1
+                    if counter < 10:
+                        repeat_if_blocking_delay *= 2
+                    else:
+                        context.logger.warning(f"Blocking Counter: {counter}")
 
             context.number_of_tuples_sent += 1
 
