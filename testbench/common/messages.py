@@ -107,7 +107,7 @@ class ThroughputStartMessage:
         self.iterations = int(data['iterations'])
         self.delay = float(data['delay'])
         self.ramp_factor = float(data['ramp_factor'])
-        self.test_id = float(data['test_id'])
+        self.test_id = data['test_id']
 
     def __str__(self) -> str:
         return f"ThroughputStartMessage:\ntest id: {self.test_id}\ndataset id: {self.dataset_id}\niterations: {self.iterations}\ndelay: {self.delay}\nramp factor: {self.ramp_factor}"
