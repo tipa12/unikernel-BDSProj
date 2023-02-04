@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
-from google.cloud import pubsub_v1
-import json
-import CustomGoogleCloudStorage  as gcs
-import LoggingFunctions as log
-import UniqueIdGenerator as uid
+
+import testbench.common.LoggingFunctions as log
+import testbench.common.UniqueIdGenerator as uid
+from testbench.common.messages import abort_experiment, start_experiment
 
 app = Flask(__name__)
 
@@ -13,20 +12,6 @@ logger = log.createLogger()
 def root():
     return 'Please give an argument to the URL.'
 
-def sendToMessageBroker(topicName, data, attributes={}):
-    # function expects a json object as data
-
-    # Google Cloud project ID
-    projectId = "bdspro"
-
-    # Create a publisher client
-    publisher = pubsub_v1.PublisherClient()
-
-    data = json.dumps(data)
-
-    # Publish the message
-    topic_path = publisher.topic_path(projectId, topicName)
-    publisher.publish(topic_path, data=data.encode('utf-8'), **attributes)
 
 @app.route('/generateDataset')
 def generateDatasetEndpoint():
@@ -39,7 +24,7 @@ def generateDatasetEndpoint():
     elementRangeStart = int(request.args.get('elementRangeStart'))
     elementRangeEnd = int(request.args.get('elementRangeEnd'))
     name = request.args.get('name')
-    
+
     # limit number of tuples to 1 million
     if numberOfTuples > 1000000:
         numberOfTuples = 1000000
@@ -60,7 +45,7 @@ def generateDatasetEndpoint():
     }
     # connect to message broker
     # generate dataset
-    
+
     # The name of the Pub/Sub topic
     topicName = "sourcePipeline"
 
@@ -68,7 +53,7 @@ def generateDatasetEndpoint():
 
     gcs.createFirestoreDocument('datasets', datasetId, datasetMetaDict)
 
-    #return datasetId, parameters
+    # return datasetId, parameters
     response = {
         'datasetId': datasetId,
         'message': 'Success',
@@ -102,7 +87,7 @@ def evaluateDatasetEndpoint():
 
     gcs.createFirestoreDocument('evaluations', evaluationId, evaluationMetaDict)
 
-    #return datasetId, evaluationId, parameters
+    # return datasetId, evaluationId, parameters
     response = {
         'datasetId': datasetId,
         'evaluationId': evaluationId,
@@ -111,6 +96,12 @@ def evaluateDatasetEndpoint():
     }
 
     return jsonify(response)
+
+
+@app.route('/abort')
+def abortExperiment():
+    abort_experiment()
+
 
 @app.route('/newExperiment')
 def newExperimentEndpoint():
@@ -121,44 +112,13 @@ def newExperimentEndpoint():
     delay = float(request.args.get('delay'))
     iterations = int(request.args.get('iterations'))
     imageName = request.args.get('imageName')
+    ramp_factor = 1.02
 
     experimentId = uid.generateUniqueExperimentId()
 
-    experimentMetaDict = {
-        "experimentId": experimentId,
-        "datasetId": datasetId,
-        "evaluationId": evaluationId,
-        "delay": delay,
-        "iterations": iterations,
-        "imageName": imageName
-    }
+    start_experiment(imageName, iterations, delay, ramp_factor, experimentId, datasetId, evaluationId)
 
-    # Send data to control instance
-    controlTopicName = "controlPipeline"
-
-    controlPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
-
-    sendToMessageBroker(controlTopicName, controlPipelineMessage, {'serviceType': 'startExperiment'})
-
-    # Send data to source instance
-    sourceTopicName = "sourcePipeline"
-
-    sourcePipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
-    sourcePipelineMessage['port'] = 8081
-
-    sendToMessageBroker(sourceTopicName, sourcePipelineMessage, {'serviceType': 'sendData'})
-
-    # Send data to sink instance
-    sinkTopicName = "sinkPipeline"
-
-    sinkPipelineMessage = {x:experimentMetaDict[x] for x in experimentMetaDict.keys()}
-    sinkPipelineMessage['port'] = 8081
-
-    sendToMessageBroker(sinkTopicName, sinkPipelineMessage, {'serviceType': 'receiveData'})
-
-    gcs.createFirestoreDocument('experiments', experimentId, experimentMetaDict)
-
-    #return datasetId, evaluationId, parameters
+    # return datasetId, evaluationId, parameters
     response = {
         'experimentId': experimentId,
         'datasetId': datasetId,
@@ -168,6 +128,7 @@ def newExperimentEndpoint():
     }
 
     return jsonify(response)
+
 
 if __name__ == '__main__':
     # This is used when running locally only. When deploying to Google App
