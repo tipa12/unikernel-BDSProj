@@ -37,7 +37,7 @@ config APPTESTOPERATOR_TESTBENCH_PORT
 
 config NETWORK_PERFORMANCE_EVALUATION
 	bool "disables logging in the ipc handler"
-	default n
+	default y
 	help
 		disables logging in the ipc handler
 

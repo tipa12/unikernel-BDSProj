@@ -27,7 +27,25 @@ typedef struct
 } tuple;
 
 #define BUFLEN (sizeof(tuple) * 50)
-static char recvbuf[BUFLEN];
+
+
+#define OVERFLOW_SIZE sizeof(tuple)
+static size_t overflow=0;
+
+char* get_recvbuf() {
+	static char recvbuf[BUFLEN + OVERFLOW_SIZE];
+	return &recvbuf[OVERFLOW_SIZE];
+}
+
+char* get_recvbuf_with_overflow() {
+	return get_recvbuf() - overflow;
+}
+
+void write_overflow(char* buffer_with_overflow, size_t size){
+	overflow = size;
+	memcpy(get_recvbuf_with_overflow(), buffer_with_overflow, size);
+}
+
 static tuple tuple_buffer[BUFLEN / sizeof(tuple)];
 
 void print_data(const tuple* data)
@@ -40,15 +58,18 @@ void print_data(const tuple* data)
     printf("  e: %d\n", data->e);
 }
 
+//
+//[OVERFLOW][RECEIVEBUFFER]
+//
 
-size_t serialize_tuples(char *buffer, size_t buffer_len, tuple *tuples)
+size_t serialize_tuples(size_t buffer_len, tuple *tuples, bool* is_done)
 {
-	int number_of_tuples = buffer_len / sizeof(tuple);
+	size_t buffer_len_including_overflow = overflow + buffer_len;
 
-	for (int i = 0; i < number_of_tuples; i++)
-	{
-		memcpy(&tuples[i], &buffer[i * sizeof(tuple)], sizeof(tuple));
-	}
+	int number_of_tuples = (buffer_len_including_overflow) / sizeof(tuple);
+	char* receive_buffer = get_recvbuf_with_overflow();
+
+	memcpy(tuples, receive_buffer, sizeof(tuple) * number_of_tuples);
 
 	for (int i = 0; i < number_of_tuples; i++)
 	{
@@ -57,6 +78,20 @@ size_t serialize_tuples(char *buffer, size_t buffer_len, tuple *tuples)
 		tuples[i].c = ntohl(tuples[i].c);
 		tuples[i].d = ntohl(tuples[i].d);
 		tuples[i].e = ntohl(tuples[i].e);
+	}
+
+
+	if (buffer_len_including_overflow % sizeof(tuple) != 0) {
+
+		// uk_pr_crit("Bufferlength had rest: %ld\n", buffer_len_including_overflow % sizeof(tuple));
+
+		if (buffer_len_including_overflow % sizeof(tuple) == strlen("DONE") && !strncmp(&receive_buffer[buffer_len_including_overflow - strlen("DONE")], "DONE", 4)) {
+			*is_done = true;
+		} else {
+			write_overflow(receive_buffer + number_of_tuples * sizeof(tuple), buffer_len_including_overflow % sizeof(tuple));
+		}
+	} else {
+		overflow = 0;
 	}
 
 	return number_of_tuples;
@@ -219,20 +254,20 @@ int process_tuples()
 	}
 
 
-	rc = recv(source_fd, recvbuf, BUFLEN, 0);
+	rc = recv(source_fd, get_recvbuf(), BUFLEN, 0);
 	start_timestamp = ukplat_monotonic_clock();
 
 	while (1)
 	{
 		if (rc < 0)
 		{
-			fprintf(stderr, "Failed to receive: %d\n", rc);
-			stop_timestamp = ukplat_monotonic_clock();
+			fprintf(stderr, "Source was closed: %d", rc);
 			goto close;
 		}
 		total_number_of_bytes_received += rc;
+		bool is_done = false;
+		size_t number_of_tuples = serialize_tuples(rc, tuple_buffer, &is_done);
 
-		size_t number_of_tuples = serialize_tuples(recvbuf, rc, tuple_buffer);
 		size_t send_buffer_length = 0;
 
 		for (size_t i = 0; i < number_of_tuples; i++)
@@ -251,23 +286,41 @@ int process_tuples()
 			if (filter_operator(&tuple_buffer[i]))
 			{
 				number_of_tuples_passing++;
-				deserialize_tuple(recvbuf, &send_buffer_length, &tuple_buffer[i]);
+				deserialize_tuple(get_recvbuf(), &send_buffer_length, &tuple_buffer[i]);
 			}
 		}
 
 
 		if (send_buffer_length > 0)
 		{
-			rc = send(destination_fd, recvbuf, send_buffer_length, 0);
+			rc = send(destination_fd, get_recvbuf(), send_buffer_length, 0);
 			if (rc < 0)
 			{
 				fprintf(stderr, "Failed to send: %d\n", rc);
 				goto close;
 			}
+			if (is_done) {
+				stop_timestamp = ukplat_monotonic_clock();
+				uk_pr_crit("Data stream was closed, terminating connections\n");
+				uk_pr_crit("Sending 'DONE' package to destination\n");
+				rc = send(destination_fd, "DONE", strlen("DONE"), 0);
+			}
 		}
 
-		rc = recv(source_fd, recvbuf, BUFLEN, 0);
+		if (is_done) {
+			uk_pr_crit("Sending 'ACK' package to source\n");
+			rc = send(source_fd, "ACK", strlen("ACK"), 0);
+			break;
+		}
+
+
+		rc = recv(source_fd, get_recvbuf(), BUFLEN, 0);
 	}
+
+	uk_pr_crit("Waiting for 'ACK' package from destination\n");
+	char ack[3];
+	rc = recv(destination_fd, &ack, 3, 0);
+	uk_pr_crit("Received 'ACK' package from destination\n");
 
 close:
 	uk_pr_crit("Total Number of Bytes Received %ld\nNumber of Tuples Process: %ld of which %ld passed the predicate!\nSkipped Tuples: %ld\n", total_number_of_bytes_received, total_number_of_tuples_received, number_of_tuples_passing, skipped);
