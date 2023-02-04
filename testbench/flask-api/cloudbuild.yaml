@@ -1,0 +1,24 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - |
+        docker build -t europe-docker.pkg.dev/bdspro/eu.gcr.io/flask-api-instance -f ./testbench/flask-api/Dockerfile ./testbench/flask-api \
+        && docker push europe-docker.pkg.dev/bdspro/eu.gcr.io/flask-api-instance
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - |
+        gcloud compute instances delete flask-api \
+            --project=bdspro \
+            --zone=europe-west3-a \
+            --quiet || true \
+        && gcloud compute instances create-with-container flask-api \
+            --project=$PROJECT_ID \
+            --zone=europe-west3-a \
+            --tags=http-server \
+            --container-image=europe-docker.pkg.dev/bdspro/eu.gcr.io/flask-api-instance \
+            --machine-type=e2-micro \
+            --scopes=https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/devstorage.read_only

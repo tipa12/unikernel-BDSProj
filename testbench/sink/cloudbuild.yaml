@@ -1,0 +1,22 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - |
+        docker build -t europe-docker.pkg.dev/bdspro/eu.gcr.io/sink-instance -f ./testbench/sink/Dockerfile ./testbench/sink \
+        && docker push europe-docker.pkg.dev/bdspro/eu.gcr.io/sink-instance
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - |
+        gcloud compute instances delete sink --project=bdspro --zone=europe-west3-a --quiet || true \
+        && gcloud compute instances create-with-container sink  \
+            --project=bdspro \
+            --zone=europe-west3-a \
+            --machine-type=e2-medium \
+            --service-account=152414602910-compute@developer.gserviceaccount.com \
+            --scopes=https://www.googleapis.com/auth/datastore,https://www.googleapis.com/auth/devstorage.full_control,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/devstorage.read_only \
+            --container-image=europe-docker.pkg.dev/bdspro/eu.gcr.io/sink-instance\
+            --network-interface=private-network-ip=10.156.0.56,subnet=default
