@@ -138,7 +138,7 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
             active_test_context.instance_clean_up()
             active_test_context.instance_clean_up = lambda: None
 
-            store_evaluation_in_bucket(logger, active_test_context.get_measurements(), active_test_context.test_id)
+            store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'control', active_test_context.test_id)
             logger.info("Experiment is Done!")
 
     except ExperimentFailedException as e:
