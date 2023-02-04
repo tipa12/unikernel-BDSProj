@@ -1,0 +1,5 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-docker.pkg.dev/bdspro/eu.gcr.io/test-bench-dependencies', '-f', './testbench/test-bench-dependencies-image/Dockerfile', './testbench']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'europe-docker.pkg.dev/bdspro/eu.gcr.io/test-bench-dependencies']

@@ -1,5 +1,0 @@
-steps:
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/test-bench-dependencies', '-f', './test-bench/test-bench-dependencies-image/Dockerfile', './test-bench']
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'gcr.io/$PROJECT_ID/test-bench-dependencies']
