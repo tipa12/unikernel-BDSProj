@@ -70,10 +70,11 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
                 if context.stop_event.is_set():
                     raise ExperimentAbortedException()
 
-                if counter == 0:
-                    delta = time_stamp
-                    time_stamp = time.perf_counter()
-                    delta = time_stamp - delta
+                delta = time_stamp
+                current = time.perf_counter()
+                delta = current - delta
+                if counter == 0 and delta > 5:
+                    time_stamp = current
                     tuples_send_in_delta = context.number_of_tuples_recv - number_of_tuples
                     number_of_tuples = context.number_of_tuples_recv
                     context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
