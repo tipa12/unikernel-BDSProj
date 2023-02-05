@@ -41,7 +41,7 @@ GITHUB_TOKEN=$1
 shift
 
 if [ "$#" -gt 1 ]; then
-  CONFIGURE_ARGS=("$@")
+  CONFIGURE_ARGS=$@
 fi
 
 # Generate a URL-friendly unique identifier
@@ -60,9 +60,9 @@ echo "Cloning repository..."
 WORKDIR=$WORKDIR/apps/unikernel
 cp -r "$PROJECT_DIR/unikernel-BDSProj/unikraft/unikernel/" "$WORKDIR"
 
-if [ ${#CONFIGURE_ARGS[@]} -eq 0 ]; then
-  echo "Configuring Unikraft application..." "${CONFIGURE_ARGS[@]}"
-  (cd "$WORKDIR" && kraft configure "${CONFIGURE_ARGS[@]}") >/dev/null
+if [ -n "$CONFIGURE_ARGS" ]; then
+  echo "Configuring Unikraft application..." "${CONFIGURE_ARGS}"
+  (cd "$WORKDIR" && kraft configure "${CONFIGURE_ARGS}") >/dev/null
 else
   echo "Configuring Unikraft application..."
   (cd "$WORKDIR" && kraft configure -F -m x86_64 -p kvm) >/dev/null
@@ -81,7 +81,7 @@ if [ -z "$REPLACE" ]; then
   echo "Creating image on Google Compute Engine..."
   gcloud compute images -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 else
-  gcloud compute images -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
+  gcloud compute images --force-create -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 fi
 
 echo "Done."
