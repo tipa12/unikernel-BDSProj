@@ -26,54 +26,47 @@ typedef struct
 	int e;
 } tuple;
 
-#define BUFLEN (sizeof(tuple) * 50)
-static char recvbuf[BUFLEN];
-static tuple tuple_buffer[BUFLEN / sizeof(tuple)];
 
 void print_data(const tuple* data)
 {
-    printf("Data:\n");
-    printf("  a: %d\n", data->a);
-    printf("  b: %d\n", data->b);
-    printf("  c: %d\n", data->c);
-    printf("  d: %d\n", data->d);
+    printf("Data:");
+    printf("  a: %d", data->a);
+    printf("  b: %d", data->b);
+    printf("  c: %d", data->c);
+    printf("  d: %d", data->d);
     printf("  e: %d\n", data->e);
 }
 
 
-size_t serialize_tuples(char *buffer, size_t buffer_len, tuple *tuples)
+int serialize_tuple(int buffer_len, tuple *tuple_buf, bool* is_done, bool* back_pressure)
 {
-	int number_of_tuples = buffer_len / sizeof(tuple);
 
-	for (int i = 0; i < number_of_tuples; i++)
-	{
-		memcpy(&tuples[i], &buffer[i * sizeof(tuple)], sizeof(tuple));
+	if(buffer_len == sizeof(tuple)) {
+		tuple_buf->a = ntohl(tuple_buf->a);
+		tuple_buf->b = ntohl(tuple_buf->b);
+		tuple_buf->c = ntohl(tuple_buf->c);
+		tuple_buf->d = ntohl(tuple_buf->d);
+		tuple_buf->e = ntohl(tuple_buf->e);
+		return 0;
+	} else if(buffer_len == 4) {
+		if(!strncmp((char*) tuple_buf, "DONE", 4)) {
+			*is_done = true;
+		} else if(!strncmp((char*) tuple_buf, "BACK", 4)) {
+			*back_pressure = true;
+		}
+		return 0;
+	} else {
+		return sizeof(tuple) - buffer_len;
 	}
-
-	for (int i = 0; i < number_of_tuples; i++)
-	{
-		tuples[i].a = ntohl(tuples[i].a);
-		tuples[i].b = ntohl(tuples[i].b);
-		tuples[i].c = ntohl(tuples[i].c);
-		tuples[i].d = ntohl(tuples[i].d);
-		tuples[i].e = ntohl(tuples[i].e);
-	}
-
-	return number_of_tuples;
 }
 
-void deserialize_tuple(char *buffer, size_t *buffer_size, const tuple *data)
+void deserialize_tuple(tuple *tuple_buf)
 {
-    tuple data_copy = *data;
-    data_copy.a = htonl(data_copy.a);
-    data_copy.b = htonl(data_copy.b);
-    data_copy.c = htonl(data_copy.c);
-    data_copy.d = htonl(data_copy.d);
-    data_copy.e = htonl(data_copy.e);
-
-    size_t data_size = sizeof(tuple);
-    memcpy(buffer + *buffer_size, &data_copy, data_size);
-    *buffer_size += data_size;
+    tuple_buf->a = htonl(tuple_buf->a);
+    tuple_buf->b = htonl(tuple_buf->b);
+    tuple_buf->c = htonl(tuple_buf->c);
+    tuple_buf->d = htonl(tuple_buf->d);
+    tuple_buf->e = htonl(tuple_buf->e);
 }
 
 int sent_boot_packet()
@@ -219,58 +212,82 @@ int process_tuples()
 	}
 
 
-	rc = recv(source_fd, recvbuf, BUFLEN, 0);
+	tuple current_tuple;
+
+	rc = recv(source_fd, &current_tuple, sizeof(tuple), 0);
 	start_timestamp = ukplat_monotonic_clock();
 
 	while (1)
 	{
 		if (rc < 0)
 		{
-			fprintf(stderr, "Failed to receive: %d\n", rc);
-			stop_timestamp = ukplat_monotonic_clock();
+			fprintf(stderr, "Source was closed: %d", rc);
 			goto close;
 		}
+
 		total_number_of_bytes_received += rc;
 
-		size_t number_of_tuples = serialize_tuples(recvbuf, rc, tuple_buffer);
-		size_t send_buffer_length = 0;
+		bool is_done = false;
+		bool adjust_backpressure = false;
 
-		for (size_t i = 0; i < number_of_tuples; i++)
-		{
+		int more_bytes = 0;
+		do {
+			more_bytes = serialize_tuple(rc, &current_tuple, &is_done, &adjust_backpressure);
+
+			if(more_bytes == 0)
+				break;
+
+			rc += recv(source_fd, ((void*)&current_tuple) + sizeof(tuple) - more_bytes, more_bytes, 0);
+		}while(true);
+
+
+		if(is_done) {
+
+			stop_timestamp = ukplat_monotonic_clock();
+			uk_pr_crit("Data stream was closed, terminating connections\n");
+			uk_pr_crit("Sending 'DONE' package to destination\n");
+			rc = send(destination_fd, "DONE", strlen("DONE"), 0);
+			uk_pr_crit("Sending 'ACK' package to source\n");
+			rc = send(source_fd, "ACK", strlen("ACK"), 0);
+			uk_pr_crit("Waiting for 'ACK' package from destination\n");
+			char ack[3];
+			rc = recv(destination_fd, &ack, 3, 0);
+			uk_pr_crit("Received 'ACK' package from destination\n");
+
+			goto close;
+
+		} else if (adjust_backpressure) {
+			uk_pr_crit("Backpressure Adjusted\n");
+			rc = send(source_fd, "ACK", strlen("ACK"), 0);
+		} else {
 			total_number_of_tuples_received++;
-
-			if(tuple_buffer[i].b != next_tuple_id) {
+			if(current_tuple.b != next_tuple_id) {
+				print_data(&current_tuple);
+				printf("rc: %d\n", rc);
+				uk_pr_crit("skipped %d to %d\n", next_tuple_id, current_tuple.b);
 				skipped++;
 			}
-			next_tuple_id = tuple_buffer[i].b + 1;
+			next_tuple_id = current_tuple.b + 1;
 
-#ifdef CONFIG_APPTESTOPERATOR_DBG_SHOW_TUPLES
-			print_data(&tuple_buffer[i]);
-#endif
-
-			if (filter_operator(&tuple_buffer[i]))
+	#ifdef CONFIG_APPTESTOPERATOR_DBG_SHOW_TUPLES
+				print_data(&current_tuple);
+	#endif
+			if (filter_operator(&current_tuple))
 			{
 				number_of_tuples_passing++;
-				deserialize_tuple(recvbuf, &send_buffer_length, &tuple_buffer[i]);
+				deserialize_tuple(&current_tuple);
+				send(destination_fd,&current_tuple, sizeof(tuple),0 );
 			}
 		}
 
 
-		if (send_buffer_length > 0)
-		{
-			rc = send(destination_fd, recvbuf, send_buffer_length, 0);
-			if (rc < 0)
-			{
-				fprintf(stderr, "Failed to send: %d\n", rc);
-				goto close;
-			}
-		}
-
-		rc = recv(source_fd, recvbuf, BUFLEN, 0);
+		rc = recv(source_fd, &current_tuple, sizeof(tuple), 0);
 	}
 
+
+
 close:
-	uk_pr_crit("Total Number of Bytes Received %ld\nNumber of Tuples Process: %ld of which %ld passed the predicate!\nSkipped Tuples: %ld\n", total_number_of_bytes_received, total_number_of_tuples_received, number_of_tuples_passing, skipped);
+	uk_pr_crit("Total Number of Bytes Received %ld\nNumber of Tuples Process: %ld of which %ld passed the predicate!\nSkipped Tuples: %ld\nLast TupleID: %d\n", total_number_of_bytes_received, total_number_of_tuples_received, number_of_tuples_passing, skipped, next_tuple_id-1);
 
 	__nsec sec = ukarch_time_nsec_to_sec(stop_timestamp - start_timestamp);
 	__nsec rem_usec = ukarch_time_subsec(stop_timestamp - start_timestamp);
