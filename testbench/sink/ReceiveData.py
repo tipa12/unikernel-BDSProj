@@ -99,7 +99,7 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
 
         for i in range(len(data) // TUPLE_SIZE_IN_BYTES):
             received_tuple = struct.unpack(f'!5i', data[i * TUPLE_SIZE_IN_BYTES:(i + 1) * TUPLE_SIZE_IN_BYTES])
-            # context.tuple_ids_received.append(received_tuple[1])
+            context.tuple_ids_received.append(received_tuple[1])
             if context.number_of_tuples_recv % scale // 10 == 0:
                 context.tuples_received_timestamps.append(time.perf_counter())
 
