@@ -193,16 +193,14 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
         if not (readable or writable or exceptional):
             # select timeout
             if context.stop_event.is_set():
-                context.logger.info("Aborting Experiment")
-                return
+                raise ExperimentAbortedException()
             else:
                 # repeat
                 continue
         else:
             # we got a connection
             if context.stop_event.is_set():
-                context.logger.info("Aborting Experiment")
-                return
+                raise ExperimentAbortedException()
 
             # Accept a single incoming connection
             client_socket, client_address = server_socket.accept()
