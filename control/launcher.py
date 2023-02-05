@@ -7,7 +7,8 @@ import uuid
 import struct
 import re
 import sys
-from typing import Any, List
+import subprocess
+from typing import Any, List, Optional
 import warnings
 
 from google.api_core.extended_operation import ExtendedOperation
@@ -17,7 +18,17 @@ from google.cloud import compute_v1
 
 PORT = 8081
 
-def get_image_from_family(project: str, family: str) -> compute_v1.Image:
+
+def get_image_from_url(project: str, image_url: str) -> Optional[compute_v1.Image]:
+    image_client = compute_v1.ImagesClient()
+    try:
+        newest_image = image_client.get(project=project, image=image_url)
+        return newest_image
+    except google.api_core.exceptions.NotFound:
+        return None
+
+
+def get_image_from_family(project: str, family: str) -> Optional[compute_v1.Image]:
     """
     Retrieve the newest image that is part of a given family in a project.
 
@@ -30,8 +41,11 @@ def get_image_from_family(project: str, family: str) -> compute_v1.Image:
     """
     image_client = compute_v1.ImagesClient()
     # List of public operating system (OS) images: https://cloud.google.com/compute/docs/images/os-details
-    newest_image = image_client.get_from_family(project=project, family=family)
-    return newest_image
+    try:
+        newest_image = image_client.get_from_family(project=project, family=family)
+        return newest_image
+    except google.api_core.exceptions.NotFound:
+        return None
 
 
 def disk_from_image(
@@ -277,21 +291,6 @@ class ExperimentFailedException(Exception):
     pass
 
 
-def launch_gcp(image_name: str, logger):
-    # Send an HTTP request using the requests library
-    project = 'bdspro'
-    zone = 'europe-west3-a'
-    test_id = uuid.uuid4()
-    framework = "unikraft"
-
-    start = time.perf_counter()
-    response = create_from_custom_image(project, zone, f"{framework}-{test_id}",
-                                        f"projects/bdspro/global/images/{image_name}")
-
-    logger.info(f"GCP Instance Creation Request response:\n{response}")
-    return start
-
-
 def receive_udp_packet(q: queue.Queue, logger):
     # Create a UDP socket and listen for incoming packets
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -303,11 +302,26 @@ def receive_udp_packet(q: queue.Queue, logger):
     logger.info(f"Received Boot Packet. Data = {data}, Addr = {addr}")
 
 
-def boot_image(image_name: str, logger):
+def get_description_from_image_name(image_name: str) -> str:
+    rexp = re.compile(r'(mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
+    if not rexp.match(image_name):
+        raise ExperimentFailedException(f'Malformed image name "{image_name}". Please enter it according to this regex: (mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
+
+    framework, operator = rexp.groups(1), rexp.groups(2)
+    return framework, operator
+
+
+def boot_image(project: str, zone: str, framework: str, image_link: str, logger):
     q = queue.Queue()
     udp_thread = threading.Thread(target=receive_udp_packet, args=(q, logger))
     udp_thread.start()
-    start = launch_gcp(image_name, logger)
+
+    test_id = uuid.uuid4()
+
+    start = time.perf_counter()
+    response = create_from_custom_image(project, zone, f"{framework}-{test_id}", image_link)
+
+    logger.info(f"GCP Instance Creation Request response:\n{response}")
     udp_thread.join(30)
     if udp_thread.is_alive():
         logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
