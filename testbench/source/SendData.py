@@ -241,8 +241,6 @@ def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05) ->
 
         response_measurements('source', {})
 
-        return active_test_context
-
     except ExperimentAbortedException as _:
         active_test_context.logger.info("Experiment was aborted")
     finally:
