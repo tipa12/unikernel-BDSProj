@@ -76,10 +76,10 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
                     delta = time_stamp - delta
                     tuples_send_in_delta = context.number_of_tuples_recv - number_of_tuples
                     number_of_tuples = context.number_of_tuples_recv
-                    logging.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
+                    context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
 
-                if counter > 20:
-                    logging.info("Receive timeout")
+                if counter > 30:
+                    context.logger.info("Receive timeout")
                     data = []
                     break
 
