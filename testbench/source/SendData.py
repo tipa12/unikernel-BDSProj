@@ -1,3 +1,4 @@
+import gc
 import logging
 import select
 import socket
@@ -247,7 +248,7 @@ def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05) ->
     finally:
         active_test_context.clean_up()
         active_test_context = None
-
+        gc.collect()
 
 def abort_current_experiment(logger: logging.Logger):
     global active_test_context

@@ -4,6 +4,7 @@ import socket
 import struct
 import threading
 import time
+import gc
 from typing import Union
 
 import testbench.common.CustomGoogleCloudStorage as gcs
@@ -165,7 +166,6 @@ def receive_data(message: ThroughputStartMessage, logger):
 
     try:
         test_tuple_throughput_receiver(active_test_context, scale=message.iterations)
-        logger.info("receiver is done")
         active_test_context.final_packet_stats = PacketStats()
 
         active_test_context.diff_packet_stats = \
@@ -180,6 +180,7 @@ def receive_data(message: ThroughputStartMessage, logger):
     finally:
         active_test_context.clean_up()
         active_test_context = None
+        gc.collect()
 
 
 def abort_current_experiment(logger: logging.Logger):
