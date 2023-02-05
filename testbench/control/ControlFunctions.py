@@ -248,13 +248,13 @@ def build_docker_image(control_port, control_address, source_port, source_addres
     client = docker.DockerClient()
     container = client.containers.run(
         "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
-        [f"unikraft-{operator}", github_token, "-F", "-m", "x86_64" "-p", "kvm", "-s",
-         f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
-         f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
-         f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
-         f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
-         f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
-         f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
+        [f"unikraft-{operator}", github_token, "-u", "-F", "-m", "x86_64", "-p", "kvm",
+         "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR='{control_address}'",
+         "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
+         "-s", f"APPTESTOPERATOR_SOURCE_ADDR='{source_address}'",
+         "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
+         "-s", f"APPTESTOPERATOR_DESTINATION_ADDR='{sink_address}'",
+         "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
          ],
         detach=True
     )
@@ -313,6 +313,3 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
     image_url = f'projects/bdspro/global/images/{latest_image_name}'
 
     return image_url
-
-
-build_docker_image("127.0.0.1", 123, "127.0.0.1", 123, "127.0.0.1", 123, "filter", "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")
