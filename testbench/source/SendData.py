@@ -82,7 +82,7 @@ def backpressure_adjustment(context: TestContext, client_socket: socket.socket):
 
 
 def handle_client(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
-                  ramp_factor: float, packet_length=4):
+                  ramp_factor: float, packet_length=1):
     if len(data) % packet_length != 0:
         context.logger.warning("Size of dataset is not divisible by packet length, dataset will be truncated")
         data = data[:(len(data) // packet_length) * packet_length]
@@ -138,6 +138,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
                     if counter < 20:
                         repeat_if_blocking_delay *= 2
                     if counter == 20:
+                        context.logger.info(f"Current {context.number_of_tuples_sent}")
                         backpressure_adjustment(context, client_socket)
                     if counter > 20:
                         context.logger.warning(f"Blocking {counter}")
