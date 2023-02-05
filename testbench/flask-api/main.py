@@ -104,55 +104,42 @@ def abortExperiment():
 
 
 @app.route('/newExperiment')
-def newExperimentEndpoint():
-    allParams = request.args.to_dict()
+def new_experiment_endpoint():
 
-    datasetId = request.args.get('datasetId')
-    evaluationId = request.args.get('evaluationId')
-    delay = float(request.args.get('delay'))
-    iterations = int(request.args.get('iterations'))
-    imageName = request.args.get('imageName')
-    githubToken = request.args.get('githubToken')
-    sourceAddress = request.args.get('sourceAddress', None)
-    sourcePort = int(request.args.get('sourcePort', None))
-    sinkAddress = request.args.get('sinkAddress', None)
-    sinkPort = int(request.args.get('sinkPort', None))
-    controlAddress = request.args.get('controlAddress', None)
-    controlPort = int(request.args.get('controlPort', None))
+    dataset_id = request.args.get('datasetId')
+    evaluation_id = request.args.get('evaluationId')
+    image_name = request.args.get('imageName')
+    github_token = request.args.get('githubToken')
+    source_address = request.args.get('sourceAddress', None)
+    source_port = int(request.args.get('sourcePort', None))
+    sink_address = request.args.get('sinkAddress', None)
+    sink_port = int(request.args.get('sinkPort', None))
+    control_address = request.args.get('controlAddress', None)
+    control_port = int(request.args.get('controlPort', None))
     operator = request.args.get('operator', 'identity')
     delay = float(request.args.get('delay', 0.1))
     iterations = int(request.args.get('iterations', 100))
     ramp_factor = 1.02
 
-    experimentId = uid.generateUniqueExperimentId()
+    experiment_id = uid.generateUniqueExperimentId()
 
-    experimentMetaDict = {
-        "experimentId": experimentId,
-        "datasetId": datasetId,
-        "evaluationId": evaluationId,
-        "delay": delay,
-        "iterations": iterations,
-        "imageName": imageName,
-        'sourceAddress': sourceAddress,
-        'sourcePort': sourcePort,
-        'sinkAddress': sinkAddress,
-        'sinkPort': sinkPort,
-        'controlAddress': controlAddress,
-        'controlPort': controlPort,
-        'githubToken': githubToken,
-        'operator': operator
-    }
-
-
-    start_experiment(imageName, iterations, delay, ramp_factor, experimentId, datasetId, evaluationId)
+    start_experiment(
+        control_port,
+        control_address,
+        sink_port,
+        sink_address,
+        source_port,
+        source_address,
+        operator,
+        github_token,
+        image_name, iterations, delay, ramp_factor, experiment_id, dataset_id, evaluation_id)
 
     # return datasetId, evaluationId, parameters
     response = {
-        'experimentId': experimentId,
-        'datasetId': datasetId,
-        'evaluationId': evaluationId,
+        'experimentId': experiment_id,
+        'datasetId': dataset_id,
+        'evaluationId': evaluation_id,
         'message': 'Success',
-        'parameters': allParams
     }
 
     return jsonify(response)

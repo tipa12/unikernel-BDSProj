@@ -12,7 +12,7 @@ from testbench.common.experiment import ExperimentAbortedException, ExperimentAl
 from testbench.common.messages import ThroughputStartMessage, response_measurements
 from testbench.common.stats import *
 
-PORT = 8082
+PORT = 8081
 
 
 class TestContext:

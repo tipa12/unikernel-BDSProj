@@ -1,11 +1,14 @@
 import logging
 import os
 import queue
+import re
 import socket
 import subprocess
 import threading
 import time
 from typing import Callable, Union
+
+import docker
 
 import launcher
 from testbench.common.CustomGoogleCloudStorage import store_evaluation_in_bucket
@@ -90,9 +93,9 @@ def read_serial_socket(context: TestContext, socket_name: str):
 def launch_locally(context: TestContext, image_name: str) -> Callable:
     import subprocess
     p = subprocess.Popen(
-        ['sudo', '-A', PATH_TO_QEMU_GUEST_SCRIPT, '-x', '-b', 'kraft0',
+        ['sudo', '-A', '/home/ls/Uni/WiSe2223/DBPRO/Unikraft-Test-Operator/scripts/qemu_guest.sh', '-x', '-b', 'kraft0',
          '-k',
-         PATH_TO_UNIKERNEL_BINARY], stdout=subprocess.PIPE)
+         '/home/ls/Uni/WiSe2223/DBPRO/Unikraft-Test-Operator/build/testoperator_kvm-x86_64'], stdout=subprocess.PIPE)
 
     socket_name = ""
     while True:
@@ -168,9 +171,8 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
     active_test_context = TestContext(logger, message.test_id)
 
     try:
-        image_name = message.image_name  # 'unikraft-1675005257' #unikraft-1674828757, unikraft-1675000514
-        # TODO: Test if image Exists and build if necessary
-
+        image_name = ensure_image_exists(active_test_context, message)
+        active_test_context.image_name = image_name
         throughput_start(message.test_id, message.iterations, message.delay, message.ramp_factor, message.dataset_id)
 
         # deploy unikernel on google cloud
@@ -228,3 +230,89 @@ def sink_is_done(sink_measurements: dict):
 
     if active_test_context.source_is_done:
         active_test_context.stop_event.set()
+
+
+def get_description_from_image_name(image_name: str) -> (str, str):
+    rexp = re.compile(r'(mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
+    matched = rexp.match(image_name)
+    if not matched:
+        raise ExperimentFailedException(
+            f'Malformed image name "{image_name}". Please enter it according to this regex: (mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
+
+    framework, operator = str(matched.group(1)), str(matched.group(2))
+    return framework, operator
+
+
+def build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address, operator,
+                       github_token):
+    client = docker.DockerClient()
+    container = client.containers.run(
+        "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
+        [f"unikraft-{operator}", github_token, "-F", "-m", "x86_64" "-p", "kvm", "-s",
+         f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
+         f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
+         f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
+         f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
+         f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
+         f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
+         ],
+        detach=True
+    )
+    container.wait()
+
+
+def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -> str:
+    image_name = message.image_name
+    github_token = message.github_token
+    operator = message.operator
+
+    ip_addrs = []
+    source_address = message.source_address
+    source_port = message.source_port
+    if source_address is not None and source_port is not None:
+        ip_addrs += [f'--source-address={source_address}', f'--source-port={source_port}']
+
+    sink_address = message.sink_address
+    sink_port = message.sink_port
+    if sink_address is not None and sink_port is not None:
+        ip_addrs += [f'--sink-address={sink_address}', f'--sink-port={sink_port}']
+
+    control_address = message.control_address
+    control_port = message.control_port
+    if control_address is not None and control_port is not None:
+        ip_addrs += [f'--control-address={control_address}', f'--control-port={control_port}']
+
+    # deploy unikernel on google cloud
+    project = 'bdspro'
+    zone = 'europe-west3-a'
+    image_url = f'projects/bdspro/global/images/{image_name}'
+
+    framework, _ = get_description_from_image_name(image_name)
+
+    image = launcher.get_image_from_family(project, framework)
+    if image is None:
+        context.logger.info(f'No image was found for family "{framework}". Building new image...')
+        timestr = time.strftime('%Y%m%d-%H%M%S')
+        latest_image_name = f'{framework}-{operator}-{timestr}'
+
+        if framework == 'mirage':
+            subprocess.run(
+                [f'mirage/build.sh', latest_image_name, github_token, '-t', 'virtio', f'--op={operator}'] + ip_addrs)
+        else:
+            build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address,
+                               operator, github_token)
+    else:
+        latest_image_name = image.name
+
+    image = launcher.get_image_from_url(project, image_url)
+    if image is None:
+        context.logger.info(f'Image {image_url} not found; falling back to latest image from family "{framework}".')
+    else:
+        latest_image_name = image.name
+
+    image_url = f'projects/bdspro/global/images/{latest_image_name}'
+
+    return image_url
+
+
+build_docker_image("127.0.0.1", 123, "127.0.0.1", 123, "127.0.0.1", 123, "filter", "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")

@@ -59,7 +59,10 @@ class ResponseMeasurementsMessage:
         self.source_or_sink = data['source_or_sink']
 
     def __str__(self) -> str:
-        return f"ResponseMeasurementsMessage:\nsource or sink: {self.source_or_sink}"
+        as_str = "ResponseMeasurementsMessage\n"
+        for k, v in vars(self):
+            as_str += f"\t{k}: {v}\n"
+        return as_str
 
 
 class StartExperimentMessage:
@@ -70,8 +73,17 @@ class StartExperimentMessage:
 
     def __init__(self, message) -> None:
         super().__init__()
+
         assert get_service_type(message) == START_EXPERIMENT
         data = get_data(message)
+        self.control_port = data['control_port']
+        self.control_address = data['control_address']
+        self.sink_port = data['sink_port']
+        self.sink_address = data['sink_address']
+        self.source_port = data['source_port']
+        self.source_address = data['source_address']
+        self.operator = data['operator']
+        self.github_token = data['github_token']
         self.image_name = data['image_name']
         self.test_id = data['test_id']
         self.dataset_id = data['dataset_id']
@@ -81,7 +93,10 @@ class StartExperimentMessage:
         self.ramp_factor = float(data['ramp_factor'])
 
     def __str__(self) -> str:
-        return f"ThroughputStartMessage:\nimage name: {self.image_name}\ntest id: {self.test_id}\nevaluation id: {self.evaluation_id}\ndataset id: {self.dataset_id}\niterations: {self.iterations}\ndelay: {self.delay}\nramp factor: {self.ramp_factor}"
+        as_str = "StartExperimentMessage\n"
+        for k, v in vars(self):
+            as_str += f"\t{k}: {v}\n"
+        return as_str
 
 
 class AbortExperimentMessage:
@@ -92,6 +107,12 @@ class AbortExperimentMessage:
     def __init__(self, message) -> None:
         super().__init__()
         assert get_service_type(message) == ABORT_EXPERIMENT
+
+    def __str__(self) -> str:
+        as_str = "AbortExperimentMessage\n"
+        for k, v in vars(self):
+            as_str += f"\t{k}: {v}\n"
+        return as_str
 
 
 class ThroughputStartMessage:
@@ -110,12 +131,32 @@ class ThroughputStartMessage:
         self.test_id = data['test_id']
 
     def __str__(self) -> str:
-        return f"ThroughputStartMessage:\ntest id: {self.test_id}\ndataset id: {self.dataset_id}\niterations: {self.iterations}\ndelay: {self.delay}\nramp factor: {self.ramp_factor}"
+        as_str = "ThroughputStartMessage\n"
+        for k, v in vars(self):
+            as_str += f"\t{k}: {v}\n"
+        return as_str
 
 
-def start_experiment(image_name: str, iterations: int, delay: float, ramp_factor: float, test_id: str, dataset_id: str,
+def start_experiment(control_port: int,
+                     control_address: str,
+                     sink_port: int,
+                     sink_address: str,
+                     source_port: int,
+                     source_address: str,
+                     operator: str,
+                     github_token: str,
+                     image_name: str, iterations: int, delay: float, ramp_factor: float, test_id: str,
+                     dataset_id: str,
                      evaluation_id: str):
     data = {
+        'control_port': control_port,
+        'control_address': control_address,
+        'sink_port': sink_port,
+        'sink_address': sink_address,
+        'source_port': source_port,
+        'source_address': source_address,
+        'operator': operator,
+        'github_token': github_token,
         'image_name': image_name,
         'test_id': test_id,
         'dataset_id': dataset_id,

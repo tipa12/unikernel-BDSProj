@@ -4,9 +4,10 @@ import subprocess
 from typing import Any, List, Optional
 import warnings
 
+import google
+from google.api_core.exceptions import NotFound
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
-
 
 
 def get_image_from_url(project: str, image_url: str) -> Optional[compute_v1.Image]:
@@ -14,7 +15,7 @@ def get_image_from_url(project: str, image_url: str) -> Optional[compute_v1.Imag
     try:
         newest_image = image_client.get(project=project, image=image_url)
         return newest_image
-    except google.api_core.exceptions.NotFound:
+    except NotFound:
         return None
 
 
@@ -73,7 +74,7 @@ def disk_from_image(
 
 
 def wait_for_extended_operation(
-    operation: ExtendedOperation, verbose_name: str = "operation", timeout: int = 300
+        operation: ExtendedOperation, verbose_name: str = "operation", timeout: int = 300
 ) -> Any:
     """
     This method will wait for the extended (long-running) operation to
@@ -116,22 +117,22 @@ def wait_for_extended_operation(
 
 
 def create_instance(
-    project_id: str,
-    zone: str,
-    instance_name: str,
-    disks: List[compute_v1.AttachedDisk],
-    machine_type: str = "e2-micro",
-    network_link: str = "global/networks/default",
-    subnetwork_link: str = None,
-    internal_ip: str = None,
-    external_access: bool = False,
-    external_ipv4: str = None,
-    accelerators: List[compute_v1.AcceleratorConfig] = None,
-    preemptible: bool = False,
-    spot: bool = False,
-    instance_termination_action: str = "STOP",
-    custom_hostname: str = None,
-    delete_protection: bool = False,
+        project_id: str,
+        zone: str,
+        instance_name: str,
+        disks: List[compute_v1.AttachedDisk],
+        machine_type: str = "e2-micro",
+        network_link: str = "global/networks/default",
+        subnetwork_link: str = None,
+        internal_ip: str = None,
+        external_access: bool = False,
+        external_ipv4: str = None,
+        accelerators: List[compute_v1.AcceleratorConfig] = None,
+        preemptible: bool = False,
+        spot: bool = False,
+        instance_termination_action: str = "STOP",
+        custom_hostname: str = None,
+        delete_protection: bool = False,
 ) -> compute_v1.Instance:
     """
     Send an instance creation request to the Compute Engine API and wait for it to complete.
@@ -247,7 +248,7 @@ def create_instance(
 
 
 def create_from_custom_image(
-    project_id: str, zone: str, instance_name: str, custom_image_link: str
+        project_id: str, zone: str, instance_name: str, custom_image_link: str
 ) -> compute_v1.Instance:
     """
     Create a new VM instance with custom image used as its boot disk.
@@ -274,7 +275,7 @@ def delete_instance(
 
 
 def print_serial_output(
-    project_id: str, zone: str, instance_name: str
+        project_id: str, zone: str, instance_name: str
 ) -> str:
     instance_client = compute_v1.InstancesClient()
     return instance_client.get_serial_port_output(project=project_id, zone=zone, instance=instance_name).contents
