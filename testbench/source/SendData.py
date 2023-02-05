@@ -20,6 +20,8 @@ class TestContext:
     def __init__(self, logger: logging.Logger) -> None:
         super().__init__()
 
+        self.adjust_backpressure_timestamps = []
+        self.adjust_backpressure_acks_timestamps = []
         self.source_socket: socket.socket | None = None
 
         self.initial_packet_stats: PacketStats | None = None
@@ -49,6 +51,32 @@ class TestContext:
     def clean_up(self):
         if self.source_socket is not None:
             self.source_socket.close()
+
+
+def close_connection(context: TestContext, client_socket: socket.socket):
+    context.logger.info("Closing Connection")
+    client_socket.setblocking(True)
+    client_socket.send(b"DONE")
+    ack_message = client_socket.recv(4)
+    context.stop_timestamp = time.perf_counter()
+    context.logger.info("Waiting for ACK")
+    context.logger.info(f"{ack_message}")
+    assert ack_message == b"ACK"
+    client_socket.close()
+    context.logger.info("Connection closed")
+
+
+def backpressure_adjustment(context: TestContext, client_socket: socket.socket):
+    context.logger.info("Backpressure Adjustment")
+    client_socket.setblocking(True)
+    context.adjust_backpressure_timestamps.append(time.perf_counter())
+    client_socket.send(b"BACK")
+    context.logger.info("Waiting for ACK")
+    ack_message = client_socket.recv(4)
+    context.adjust_backpressure_acks_timestamps.append(time.perf_counter())
+    assert ack_message == b"ACK"
+    context.logger.info("Backpressure Adjusted")
+    client_socket.setblocking(False)
 
 
 def handle_client(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
@@ -105,10 +133,12 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
 
                     time.sleep(repeat_if_blocking_delay)
                     counter += 1
-                    if counter < 10:
+                    if counter < 20:
                         repeat_if_blocking_delay *= 2
-                    else:
-                        context.logger.warning(f"Blocking Counter: {counter}")
+                    if counter == 20:
+                        backpressure_adjustment(context, client_socket)
+                    if counter > 20:
+                        context.logger.warning(f"Blocking {counter}")
 
             context.number_of_tuples_sent += packet_length
 
@@ -130,16 +160,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
 
             time.sleep(delay)
 
-    context.logger.info("Closing Connection")
-    client_socket.setblocking(True)
-    client_socket.send(b"DONE")
-    ack_message = client_socket.recv(4)
-    context.stop_timestamp = time.perf_counter()
-    context.logger.info("Waiting for ACK")
-    context.logger.info(f"{ack_message}")
-    assert ack_message == b"ACK"
-    client_socket.close()
-    context.logger.info("Connection closed")
+    close_connection(context, client_socket)
 
 
 def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, socket_opts=False):
