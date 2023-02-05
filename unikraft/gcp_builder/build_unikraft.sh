@@ -79,9 +79,9 @@ gsutil cp unikraft.tar.gz "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 
 if [ -z "$REPLACE" ]; then
   echo "Creating image on Google Compute Engine..."
-  gcloud compute images -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
+  gcloud compute images --family=unikraft -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 else
-  gcloud compute images --force-create -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
+  gcloud compute images --family=unikraft --force-create -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 fi
 
 echo "Done."
