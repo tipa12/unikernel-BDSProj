@@ -1,12 +1,14 @@
 import logging
+import os
 import queue
 import socket
+import subprocess
 import threading
 import time
 from typing import Callable, Union
 
 import launcher
-from testbench.common.CustomGoogleCloudStorage import store_evaluation, store_evaluation_in_bucket
+from testbench.common.CustomGoogleCloudStorage import store_evaluation_in_bucket
 from testbench.common.experiment import *
 from testbench.common.messages import StartExperimentMessage, throughput_start, abort_experiment
 
@@ -61,6 +63,52 @@ def clean_up_gcp(context: TestContext, project, zone, instance_name):
     launcher.delete_instance(project, zone, instance_name)
 
 
+def clean_up_locally(context: TestContext, p):
+    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
+    p.terminate()
+
+
+def wait_for_serial_socket_to_exist(file_path: str, timeout: int) -> bool:
+    start_time = time.time()
+    while not os.path.exists(file_path):
+        time.sleep(0.1)
+        if time.time() - start_time > timeout:
+            return False
+    else:
+        return True
+
+
+def read_serial_socket(context: TestContext, socket_name: str):
+    context.logger.info(f"Waiting for socket: {socket_name}")
+    with open("/tmp/socat.out", "w+") as file:
+        p = subprocess.run(
+            ["sudo", "-A", 'socat', '-', f'UNIX-CONNECT:{socket_name}'],
+            stdout=file
+        )
+
+
+def launch_locally(context: TestContext, image_name: str) -> Callable:
+    import subprocess
+    p = subprocess.Popen(
+        ['sudo', '-A', PATH_TO_QEMU_GUEST_SCRIPT, '-x', '-b', 'kraft0',
+         '-k',
+         PATH_TO_UNIKERNEL_BINARY], stdout=subprocess.PIPE)
+
+    socket_name = ""
+    while True:
+        line = p.stdout.readline().decode().strip()
+        print(line)
+        if not line:
+            break
+        if line.startswith("Serial socket:"):
+            socket_name = line.split(":")[1].strip()
+            break
+
+    threading.Thread(target=read_serial_socket, args=(context, socket_name)).start()
+
+    return lambda: clean_up_locally(context, p)
+
+
 def launch_gcp(context: TestContext, image_name: str) -> Callable:
     # Send an HTTP request using the requests library
     project = 'bdspro'
@@ -87,12 +135,12 @@ def receive_udp_packet(context: TestContext, q: queue.Queue):
     context.logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
 
 
-def test_boot_time(context: TestContext, image_name: str):
+def test_boot_time(context: TestContext, image_name: str, launch_fn=launch_gcp):
     q = queue.Queue()
     udp_thread = threading.Thread(target=receive_udp_packet, args=(context, q))
     udp_thread.start()
 
-    clean_up = launch_gcp(context, image_name)
+    clean_up = launch_fn(context, image_name)
     context.instance_clean_up = clean_up
 
     if active_test_context.stop_event.wait(30):
@@ -105,7 +153,7 @@ def test_boot_time(context: TestContext, image_name: str):
         context.logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
         raise ExperimentFailedException("Boot Packet Timeout")
 
-    context.logger.info(f"Unikernel Booted in {context.boot_packet_timestamp - context.start_timestamp}s.")
+    context.logger.info(f"Unikernel Booted in {context.boot_packet_timestamp} - {context.start_timestamp}s.")
 
 
 active_test_context: Union[TestContext, None] = None
@@ -138,7 +186,8 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
             active_test_context.instance_clean_up()
             active_test_context.instance_clean_up = lambda: None
 
-            store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'control', active_test_context.test_id)
+            store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'control',
+                                       active_test_context.test_id)
             logger.info("Experiment is Done!")
 
     except ExperimentFailedException as e:
@@ -162,6 +211,7 @@ def abort_current_experiment(logger: logging.Logger):
 
 
 def source_is_done(source_measurements: dict):
+    global active_test_context
     if active_test_context is not None:
         active_test_context.source_is_done = True
         active_test_context.source_measurements = source_measurements
@@ -171,6 +221,7 @@ def source_is_done(source_measurements: dict):
 
 
 def sink_is_done(sink_measurements: dict):
+    global active_test_context
     if active_test_context is not None:
         active_test_context.sink_is_done = True
         active_test_context.sink_measurements = sink_measurements
