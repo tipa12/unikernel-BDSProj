@@ -5,7 +5,6 @@ import socket
 import struct
 import threading
 import time
-from _socket import SHUT_WR, SHUT_RD
 from typing import Union
 
 import testbench.common.CustomGoogleCloudStorage as gcs
@@ -31,6 +30,7 @@ class TestContext:
 
         self.tuple_timestamps = []
         self.number_of_tuples_sent = 0
+        self.qualifying_tuple_ids = []
         self.number_of_tuples_passing_the_filter = 0
         self.start_timestamp: float | None = None
         self.stop_timestamp: float | None = None
@@ -44,6 +44,7 @@ class TestContext:
             "tuples_sent_timestamps": self.tuple_timestamps,
             "number_of_tuples_sent": self.number_of_tuples_sent,
             "number_of_tuples_passing_the_filter": self.number_of_tuples_passing_the_filter,
+            "qualifying_tuple_ids": self.qualifying_tuple_ids,
             "start_timestamp": self.start_timestamp,
             "stop_timestamp": self.stop_timestamp,
             "packets": vars(self.diff_packet_stats),
@@ -100,7 +101,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
     for _ in range(scale):
         for i in range(0, len(data), packet_length):
 
-            passing = [data[i + pi][0] > 0 for pi in range(packet_length)]
+            passing = [(data[i + pi][0] > 0, context.number_of_tuples_sent + pi) for pi in range(packet_length)]
 
             data_tuple = [
                 [data[i + pi][0], context.number_of_tuples_sent + pi, data[i + pi][2], data[i + pi][3], data[i + pi][4]]
@@ -144,10 +145,10 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
             context.number_of_tuples_sent += packet_length
 
             for p in passing:
-                if p:
+                if p[0]:
                     if context.number_of_tuples_passing_the_filter % scale // 10 == 0:
                         context.tuple_timestamps.append(time.perf_counter())
-
+                    context.qualifying_tuple_ids.append(p[1])
                     context.number_of_tuples_passing_the_filter += 1
 
             # Decrease the delay time - comment out to send data at a constant rate
@@ -245,6 +246,7 @@ def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05) ->
         active_test_context.clean_up()
         active_test_context = None
         gc.collect()
+
 
 def abort_current_experiment(logger: logging.Logger):
     global active_test_context
