@@ -112,9 +112,37 @@ def newExperimentEndpoint():
     delay = float(request.args.get('delay'))
     iterations = int(request.args.get('iterations'))
     imageName = request.args.get('imageName')
+    githubToken = request.args.get('githubToken')
+    sourceAddress = request.args.get('sourceAddress', None)
+    sourcePort = int(request.args.get('sourcePort', None))
+    sinkAddress = request.args.get('sinkAddress', None)
+    sinkPort = int(request.args.get('sinkPort', None))
+    controlAddress = request.args.get('controlAddress', None)
+    controlPort = int(request.args.get('controlPort', None))
+    operator = request.args.get('operator', 'identity')
+    delay = float(request.args.get('delay', 0.1))
+    iterations = int(request.args.get('iterations', 100))
     ramp_factor = 1.02
 
     experimentId = uid.generateUniqueExperimentId()
+
+    experimentMetaDict = {
+        "experimentId": experimentId,
+        "datasetId": datasetId,
+        "evaluationId": evaluationId,
+        "delay": delay,
+        "iterations": iterations,
+        "imageName": imageName,
+        'sourceAddress': sourceAddress,
+        'sourcePort': sourcePort,
+        'sinkAddress': sinkAddress,
+        'sinkPort': sinkPort,
+        'controlAddress': controlAddress,
+        'controlPort': controlPort,
+        'githubToken': githubToken,
+        'operator': operator
+    }
+
 
     start_experiment(imageName, iterations, delay, ramp_factor, experimentId, datasetId, evaluationId)
 

@@ -1,88 +1,98 @@
 open Lwt.Infix
 
 type tuple = {
-  id : int32;
-  value : int32
+  a : int32;
+  b : int32;
+  c : int32;
+  d : int32;
+  e : int32
 }
 
-let sizeof_tuple = 8
-let get_tuple_id v = Cstruct.LE.get_uint32 v 0
-let set_tuple_id v x = Cstruct.LE.set_uint32 v 0 x
-let get_tuple_value v = Cstruct.LE.get_uint32 v 4
-let set_tuple_value v x = Cstruct.LE.set_uint32 v 4 x
+let sizeof_tuple = 20
+let get_tuple_a v = Cstruct.LE.get_uint32 v 0
+let set_tuple_a v x = Cstruct.LE.set_uint32 v 0 x
+
+let get_tuple_b v = Cstruct.LE.get_uint32 v 4
+let set_tuple_b v x = Cstruct.LE.set_uint32 v 4 x
+
+let get_tuple_c v = Cstruct.LE.get_uint32 v 8
+let set_tuple_c v x = Cstruct.LE.set_uint32 v 8 x
+
+let get_tuple_d v = Cstruct.LE.get_uint32 v 12
+let set_tuple_d v x = Cstruct.LE.set_uint32 v 12 x
+
+let get_tuple_e v = Cstruct.LE.get_uint32 v 16
+let set_tuple_e v x = Cstruct.LE.set_uint32 v 16 x
+
+let tuple_from_buffer buf =
+  let a = get_tuple_a buf in
+  let b = get_tuple_b buf in
+  let c = get_tuple_c buf in
+  let d = get_tuple_d buf in
+  let e = get_tuple_e buf in
+  { a; b; c; d; e }
+
+let tuple_to_buffer t =
+  let be = Cstruct.of_bigarray (Bigarray.(Array1.create char c_layout sizeof_tuple)) in
+  set_tuple_a be t.a;
+  set_tuple_b be t.b;
+  set_tuple_c be t.c;
+  set_tuple_d be t.d;
+  set_tuple_e be t.e;
+  be
 
 module Main
   (S : Tcpip.Stack.V4V6) =
 struct
-  let tcp_echo s ~dst ~dst_port ~operator =
-    let handle_tcp_packet flow buf =
-      let _ (*count_tcp_packets*) =
-        String.split_on_char ' ' (Cstruct.to_string buf) |> List.length |> fun i -> i - 1
-      in
-      let tuple_from_buffer =
-        let id = get_tuple_id buf in
-        let value = get_tuple_value buf in
-        { id; value }
-      in
-      let tuple_to_buffer t =
-        let be = Cstruct.of_bigarray (Bigarray.(Array1.create char c_layout sizeof_tuple)) in
-        set_tuple_id be t.id;
-        set_tuple_value be t.value;
-        be
-      in
-      let write_tuple t =
-        S.TCP.write flow (tuple_to_buffer t) >>= function
-            | Ok () -> Lwt.return_unit
-            | Error e -> 
-                Logs.err (fun m -> m "Error when sending TCP Package: %a" S.TCP.pp_write_error e);
-                Lwt.return_unit
-      in
-      let _ = match operator tuple_from_buffer with
-          Some t -> write_tuple t
-          | None -> Lwt.return_unit
-      in
-      (* Logs.info (fun m -> m "Length: %d" count_tcp_packets) *)
-      ()
-    in
-
-    let rec wait_for_tuple flow =
-      S.TCP.read flow >>= function
+  let run_tuple_processing s ~src_addr ~src_port ~sink_addr ~sink_port ~operator =
+    let rec process_packet source_flow sink_flow =
+      S.TCP.read source_flow >>= function
       | Ok `Eof -> Lwt.return_unit
       | Ok (`Data buf) ->
-          handle_tcp_packet flow buf;
-          wait_for_tuple flow
+        let write_tuple t =
+          S.TCP.write sink_flow (tuple_to_buffer t) >>= function
+          | Ok () -> Lwt.return_unit
+          | Error e ->
+              Logs.err (fun m -> m "Error when sending TCP packet: %a" S.TCP.pp_write_error e);
+              Lwt.return_unit
+        in
+        let _ = match operator (tuple_from_buffer buf) with
+          Some t -> write_tuple t
+          | None -> Lwt.return_unit
+        in
+        process_packet source_flow sink_flow
       | Error e ->
-          Logs.err (fun m -> m "Error when waiting for TCP Package: %a" S.TCP.pp_error e);
+          Logs.err (fun m -> m "Error when reading TCP packet: %a" S.TCP.pp_error e);
           Lwt.return_unit
     in
-    let initiate_tuple_flow flow =
-      S.TCP.write flow (Cstruct.string "READY") >>= function
-      | Ok () -> wait_for_tuple flow
-      | Error e ->
-          Logs.err (fun m ->
-              m "Error when sending TCP Package: %a" S.TCP.pp_write_error e);
-          Lwt.return_unit
-    in
-    S.TCP.create_connection s (dst, dst_port) >>= function
-    | Ok flow -> initiate_tuple_flow flow
+
+    S.TCP.create_connection s (src_addr, src_port) >>= function
+    | Ok source_flow ->
+        (S.TCP.create_connection s (sink_addr, sink_port) >>= function
+        | Ok sink_flow -> process_packet source_flow sink_flow
+        | Error e ->
+            Logs.err (fun m -> m "Error when connecting to sink: %a" S.TCP.pp_error e);
+            Lwt.return_unit)
     | Error e ->
-        Logs.err (fun m ->
-            m "Error when waiting for TCP Package: %a" S.TCP.pp_error e);
+        Logs.err (fun m -> m "Error when connecting to source: %a" S.TCP.pp_error e);
         Lwt.return_unit
 
-  let notifyHost s ~dst ~dst_port =
-    S.UDP.write ~dst ~dst_port s (Cstruct.string "BOOTED") >>= function
+  let send_boot_packet s ~control_addr ~control_port =
+    S.UDP.write ~dst:control_addr ~dst_port:control_port s (Cstruct.string "BOOTED") >>= function
     | Ok () ->
-        Logs.info (fun m -> m "Boot Package Sent");
+        Logs.info (fun m -> m "Boot Package Sent to %s:%d" (Ipaddr.to_string control_addr) control_port);
         Lwt.return_unit
     | Error e ->
-        Logs.err (fun m ->
-            m "Error when sending Boot Package: %a" S.UDP.pp_error e);
+        Logs.err (fun m -> m "Error when sending Boot Package: %a" S.UDP.pp_error e);
         Lwt.return_unit
 
   let start s =
-    let port = Key_gen.port () in
-    let addr = Ipaddr.of_string_exn (Key_gen.addr ()) in
+    let src_addr = Ipaddr.of_string_exn (Key_gen.source_address ()) in
+    let src_port = Key_gen.source_port () in
+    let sink_addr = Ipaddr.of_string_exn (Key_gen.sink_address ()) in
+    let sink_port = Key_gen.sink_port () in
+    let control_addr = Ipaddr.of_string_exn (Key_gen.control_address ()) in
+    let control_port = Key_gen.control_port () in
     let op =
       match Key_gen.op () with
       "filter" -> "filter"
@@ -95,25 +105,25 @@ struct
     let identity t : tuple option = Some t in
 
     let filter t : tuple option =
-      if t.value > 50l then Some t
+      if t.a > 0l then Some t
       else None
     in
 
-    let map t : tuple option = Some { id = t.id; value = (Int32.add t.value 1l) } in
+    let map t : tuple option = Some { a = (Int32.add t.a 1l); b = t.b; c = t.c; d = t.d; e = t.e } in
 
     let avg t : tuple option =
       let counter = ref 1 in
-      let acc = ref t.value in
+      let acc = ref t.a in
       let closure = fun () ->
         match !counter with
         | 10 ->
           counter := 1;
-          acc := t.value;
+          acc := t.a;
         | _ ->
           incr counter;
-          acc := Int32.add !acc t.value;
+          acc := Int32.add !acc t.a;
         ;
-        Some { id = t.id; value = (Int32.div !acc (Int32.of_int !counter)) }
+        Some { a = (Int32.div !acc (Int32.of_int !counter)); b = t.b; c = t.c; d = t.d; e = t.e }
       in
       closure ()
     in
@@ -127,8 +137,7 @@ struct
     in
 
     (* Start Code *)
-    notifyHost (S.udp s) ~dst:addr ~dst_port:port >>= fun () ->
-    Logs.info (fun f ->
-        f "Starting %s operator at %s:%d" op (Ipaddr.to_string addr) port);
-    tcp_echo ~dst:addr ~dst_port:port ~operator:operator (S.tcp s)
+    send_boot_packet (S.udp s) ~control_addr ~control_port >>= fun () ->
+      Logs.info (fun f -> f "Connecting %s operator to %s:%d (source) and %s:%d (sink)" op (Ipaddr.to_string src_addr) src_port (Ipaddr.to_string sink_addr) sink_port);
+    run_tuple_processing ~src_addr ~src_port ~sink_addr ~sink_port ~operator (S.tcp s)
 end

@@ -1,13 +1,24 @@
 import re
 import sys
-from typing import Any, List
+import subprocess
+from typing import Any, List, Optional
 import warnings
 
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
 
 
-def get_image_from_family(project: str, family: str) -> compute_v1.Image:
+
+def get_image_from_url(project: str, image_url: str) -> Optional[compute_v1.Image]:
+    image_client = compute_v1.ImagesClient()
+    try:
+        newest_image = image_client.get(project=project, image=image_url)
+        return newest_image
+    except google.api_core.exceptions.NotFound:
+        return None
+
+
+def get_image_from_family(project: str, family: str) -> Optional[compute_v1.Image]:
     """
     Retrieve the newest image that is part of a given family in a project.
     Args:
@@ -18,8 +29,11 @@ def get_image_from_family(project: str, family: str) -> compute_v1.Image:
     """
     image_client = compute_v1.ImagesClient()
     # List of public operating system (OS) images: https://cloud.google.com/compute/docs/images/os-details
-    newest_image = image_client.get_from_family(project=project, family=family)
-    return newest_image
+    try:
+        newest_image = image_client.get_from_family(project=project, family=family)
+        return newest_image
+    except google.api_core.exceptions.NotFound:
+        return None
 
 
 def disk_from_image(

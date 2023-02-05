@@ -66,6 +66,6 @@ echo "Uploading image to Google Cloud Storage..."
 gsutil cp mirageos.tar.gz gs://mirageos/mirageos-${UNIQUE_ID}.tar.gz
 
 echo "Creating image on Google Compute Engine..."
-gcloud compute images -q create $NAME --source-uri gs://mirageos/mirageos-${UNIQUE_ID}.tar.gz
+gcloud compute images -q create $NAME --source-uri gs://mirageos/mirageos-${UNIQUE_ID}.tar.gz --family mirageos
 
 echo "Done."
