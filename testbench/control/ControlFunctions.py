@@ -6,7 +6,7 @@ import socket
 import subprocess
 import threading
 import time
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
 
 import docker
 
@@ -232,7 +232,7 @@ def sink_is_done(sink_measurements: dict):
         active_test_context.stop_event.set()
 
 
-def get_description_from_image_name(image_name: str) -> (str, str):
+def get_description_from_image_name(image_name: str) -> Tuple[str, str]:
     rexp = re.compile(r'(mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
     matched = rexp.match(image_name)
     if not matched:
@@ -243,7 +243,7 @@ def get_description_from_image_name(image_name: str) -> (str, str):
     return framework, operator
 
 
-def build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address, operator,
+def build_unikraft_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address, operator,
                        github_token):
     client = docker.DockerClient()
     container = client.containers.run(
@@ -256,6 +256,16 @@ def build_docker_image(control_port, control_address, source_port, source_addres
          "-s", f"APPTESTOPERATOR_DESTINATION_ADDR='{sink_address}'",
          "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
          ],
+        detach=True
+    )
+    container.wait()
+
+
+def build_mirage_docker_image(ip_addrs, operator, github_token):
+    client = docker.DockerClient()
+    container = client.containers.run(
+        "europe-docker.pkg.dev/bdspro/eu.gcr.io/mirageos-gcp-image-builder",
+        [f"mirage-{operator}", github_token, "-u", "-t", "virtio", f"--op={operator}"] + ip_addrs,
         detach=True
     )
     container.wait()
@@ -287,6 +297,12 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
     zone = 'europe-west3-a'
     image_url = f'projects/bdspro/global/images/{image_name}'
 
+    image = launcher.get_image_from_url(project, image_url)
+    if image is None:
+        context.logger.info(f'Image {image_url} not found; falling back to latest image from family "{framework}".')
+    else:
+        latest_image_name = image.name
+
     framework, _ = get_description_from_image_name(image_name)
 
     image = launcher.get_image_from_family(project, framework)
@@ -296,17 +312,10 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
         latest_image_name = f'{framework}-{operator}-{timestr}'
 
         if framework == 'mirage':
-            subprocess.run(
-                [f'mirage/build.sh', latest_image_name, github_token, '-t', 'virtio', f'--op={operator}'] + ip_addrs)
+            build_mirage_docker_image(ip_addrs, operator, github_token)
         else:
-            build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address,
-                               operator, github_token)
-    else:
-        latest_image_name = image.name
-
-    image = launcher.get_image_from_url(project, image_url)
-    if image is None:
-        context.logger.info(f'Image {image_url} not found; falling back to latest image from family "{framework}".')
+            build_unikraft_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address,
+                                    operator, github_token)
     else:
         latest_image_name = image.name
 
