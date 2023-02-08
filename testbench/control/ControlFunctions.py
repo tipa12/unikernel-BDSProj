@@ -255,8 +255,7 @@ def build_docker_image(control_port, control_address, source_port, source_addres
          "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
          "-s", f"APPTESTOPERATOR_DESTINATION_ADDR='{sink_address}'",
          "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
-         ],
-        detach=True
+         ]
     )
     container.wait()
 
