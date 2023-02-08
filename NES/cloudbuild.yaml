@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - './scripts/build-docker-images.sh'
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: "bash"
+    args:
+      - '-c'
+      - './scripts/deploy-to-gcp.sh'
