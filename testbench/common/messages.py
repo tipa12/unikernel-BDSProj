@@ -60,7 +60,7 @@ class ResponseMeasurementsMessage:
 
     def __str__(self) -> str:
         as_str = "ResponseMeasurementsMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -94,7 +94,7 @@ class StartExperimentMessage:
 
     def __str__(self) -> str:
         as_str = "StartExperimentMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -110,7 +110,7 @@ class AbortExperimentMessage:
 
     def __str__(self) -> str:
         as_str = "AbortExperimentMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -132,7 +132,7 @@ class ThroughputStartMessage:
 
     def __str__(self) -> str:
         as_str = "ThroughputStartMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
