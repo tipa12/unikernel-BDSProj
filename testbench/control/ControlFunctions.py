@@ -248,12 +248,12 @@ def build_docker_image(control_port, control_address, source_port, source_addres
     client = docker.DockerClient()
     container = client.containers.run(
         "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
-        [f"unikraft-{operator}", github_token, "-u", "-F", "-m", "x86_64", "-p", "kvm",
-         "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR='{control_address}'",
+        [f"unikraft-{operator}", github_token, "-F", "-m", "x86_64", "-p", "kvm",
+         "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
          "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
-         "-s", f"APPTESTOPERATOR_SOURCE_ADDR='{source_address}'",
+         "-s", f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
          "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
-         "-s", f"APPTESTOPERATOR_DESTINATION_ADDR='{sink_address}'",
+         "-s", f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
          "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
          ]
     )
