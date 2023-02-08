@@ -4,33 +4,20 @@ set -e # Abort on failure
 
 function finish {
   echo "Deleting instance"
-  gcloud compute instances delete --zone "$ZONE" --project "$PROJECT_ID" "$HOSTNAME"
+  gcloud compute instances delete --zone "$ZONE" --project "${PROJECT_ID:-bdspro}" "$HOSTNAME"
 }
 
 trap finish EXIT
 
 # Set default values for the arguments
 NAME=""
-REPLACE=false
+REPLACE=true
 CONFIGURE_ARGS=""
-
-# Parse the command-line arguments using getopts
-while getopts ":u" opt; do
-  case $opt in
-  u)
-    REPLACE=true
-    ;;
-  \?)
-    echo "Invalid option: -$OPTARG" >&2
-    exit 1
-    ;;
-  esac
-done
-shift $((OPTIND - 1))
+PROJECT_ID="bdspro"
 
 # Check if the required arguments are provided
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 IMAGE_NAME GITHUB_TOKEN [-u] [CONFIGURE_ARGS]"
+  echo "Usage: $0 IMAGE_NAME GITHUB_TOKEN [CONFIGURE_ARGS]"
   exit 1
 fi
 
@@ -62,7 +49,7 @@ cp -r "$PROJECT_DIR/unikernel-BDSProj/unikraft/unikernel/" "$WORKDIR"
 
 if [ -n "$CONFIGURE_ARGS" ]; then
   echo "Configuring Unikraft application..." "${CONFIGURE_ARGS}"
-  (cd "$WORKDIR" && kraft configure "${CONFIGURE_ARGS}") >/dev/null
+  (cd "$WORKDIR" && kraft configure ${CONFIGURE_ARGS}) >/dev/null
 else
   echo "Configuring Unikraft application..."
   (cd "$WORKDIR" && kraft configure -F -m x86_64 -p kvm) >/dev/null
@@ -79,9 +66,9 @@ gsutil cp unikraft.tar.gz "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 
 if [ -z "$REPLACE" ]; then
   echo "Creating image on Google Compute Engine..."
-  gcloud compute images --family=unikraft -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
+  gcloud compute images --project "${PROJECT_ID:-bdspro}" --family=unikraft -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 else
-  gcloud compute images --family=unikraft --force-create -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
+  gcloud compute images --project "${PROJECT_ID:-bdspro}" --family=unikraft --force-create -q create "$NAME" --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz"
 fi
 
 echo "Done."
