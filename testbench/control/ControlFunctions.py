@@ -253,6 +253,7 @@ def build_docker_image(context: TestContext, image_name: str, control_port, cont
                        github_token):
     client = docker.DockerClient()
     try:
+        context.logger.info("Launching docker build for unikraft")
         image_name = client.containers.run(
             "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
             [image_name, github_token, "-F", "-m", "x86_64", "-p", "kvm",
@@ -301,12 +302,17 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
 
     image = launcher.find_image_that_matches_configuration(control_port, control_address, source_port, source_address,
                                                            sink_port, sink_address, operator, framework)
-    if image is None:
-        context.logger.info(f'No image was found for family "{framework}". Building new image...')
 
     if image is None or message.force_rebuild:
-        timestr = time.strftime('%Y%m%d-%H%M%S')
-        latest_image_name = f'{framework}-{operator}-{timestr}'
+        timestr = time.strftime('%y%m%d-%H%M%S')
+        # image names are limited to 19 characters
+        latest_image_name = f'{framework[0]}-{operator[0]}-{timestr[2:]}'
+
+        if image is None:
+            context.logger.info(f'No image was found for family "{framework}". Building new image...')
+
+        if message.force_rebuild:
+            context.logger.info(f'Force Rebuild. Building new image...')
 
         if framework == 'mirage':
             subprocess.run(
