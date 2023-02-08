@@ -9,6 +9,7 @@ import time
 from typing import Callable, Union
 
 import docker
+from docker.errors import ContainerError
 
 import launcher
 from testbench.common.CustomGoogleCloudStorage import store_evaluation_in_bucket
@@ -281,16 +282,14 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
     if control_address is not None and control_port is not None:
         ip_addrs += [f'--control-address={control_address}', f'--control-port={control_port}']
 
-    # deploy unikernel on google cloud
-    project = 'bdspro'
-    zone = 'europe-west3-a'
-    image_url = f'projects/bdspro/global/images/{image_name}'
+    framework, operator = get_description_from_image_name(image_name)
 
-    framework, _ = get_description_from_image_name(image_name)
-
-    image = launcher.get_image_from_family(project, framework)
+    image = launcher.find_image_that_matches_configuration(control_port, control_address, source_port, source_address,
+                                                           sink_port, sink_address, operator, framework)
     if image is None:
         context.logger.info(f'No image was found for family "{framework}". Building new image...')
+
+    if image is None or message.force_rebuild:
         timestr = time.strftime('%Y%m%d-%H%M%S')
         latest_image_name = f'{framework}-{operator}-{timestr}'
 
@@ -298,17 +297,12 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
             subprocess.run(
                 [f'mirage/build.sh', latest_image_name, github_token, '-t', 'virtio', f'--op={operator}'] + ip_addrs)
         else:
-            build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address,
-                               operator, github_token)
+            latest_image_name = build_docker_image(context, latest_image_name, control_port, control_address,
+                                                   source_port, source_address,
+                                                   sink_port,
+                                                   sink_address,
+                                                   operator, github_token)
     else:
         latest_image_name = image.name
 
-    image = launcher.get_image_from_url(project, image_url)
-    if image is None:
-        context.logger.info(f'Image {image_url} not found; falling back to latest image from family "{framework}".')
-    else:
-        latest_image_name = image.name
-
-    image_url = f'projects/bdspro/global/images/{latest_image_name}'
-
-    return image_url
+    return latest_image_name
