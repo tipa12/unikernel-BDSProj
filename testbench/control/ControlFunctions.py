@@ -244,21 +244,33 @@ def get_description_from_image_name(image_name: str) -> (str, str):
     return framework, operator
 
 
-def build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address, operator,
+def build_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
+                       source_address, sink_port,
+                       sink_address, operator,
                        github_token):
     client = docker.DockerClient()
-    container = client.containers.run(
-        "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
-        [f"unikraft-{operator}", github_token, "-F", "-m", "x86_64", "-p", "kvm",
-         "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
-         "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
-         "-s", f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
-         "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
-         "-s", f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
-         "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
-         ]
-    )
-    container.wait()
+    try:
+        image_name = client.containers.run(
+            "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
+            [image_name, github_token, "-F", "-m", "x86_64", "-p", "kvm",
+             "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
+             "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
+             "-s", f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
+             "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
+             "-s", f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
+             "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
+             ]
+        ).decode('utf-8').strip()
+
+        context.logger.info(f"Image: {image_name} was created. Labeling the Image")
+        launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, control_address, control_port,
+                                       source_address, source_port, sink_address, sink_port)
+        context.logger.info(f"Labeling done")
+
+        return image_name
+    except ContainerError as e:
+        context.logger.error(e)
+        raise ExperimentFailedException("Cannot build unikraft image")
 
 
 def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -> str:
