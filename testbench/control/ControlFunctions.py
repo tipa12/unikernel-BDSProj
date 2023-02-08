@@ -36,7 +36,7 @@ class TestContext:
         self.sink_is_done: bool = False
 
         self.uut_serial_log: str | None = None
-        self.instance_clean_up: Callable = None
+        self.instance_clean_up: Callable = lambda: None
         self.boot_socket: socket.socket | None = None
 
         self.source_measurements: dict | None = None
@@ -64,7 +64,10 @@ class TestContext:
 def clean_up_gcp(context: TestContext, project, zone, instance_name):
     context.uut_serial_log = launcher.print_serial_output(project, zone, instance_name)
     context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
-    launcher.delete_instance(project, zone, instance_name)
+    try:
+        launcher.delete_instance(project, zone, instance_name)
+    except Exception as e:
+        context.logger.error(e)
 
 
 def clean_up_locally(context: TestContext, p):
