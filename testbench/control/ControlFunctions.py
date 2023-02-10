@@ -254,9 +254,9 @@ def build_docker_image(context: TestContext, image_name: str, control_port, cont
     client = docker.DockerClient()
     try:
         context.logger.info("Launching docker build for unikraft")
-        image_name = client.containers.run(
+        binary_file_name = client.containers.run(
             "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
-            [image_name, github_token, "-F", "-m", "x86_64", "-p", "kvm",
+            [github_token, "-F", "-m", "x86_64", "-p", "kvm",
              "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
              "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
              "-s", f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
@@ -264,6 +264,13 @@ def build_docker_image(context: TestContext, image_name: str, control_port, cont
              "-s", f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
              "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
              ]
+        ).decode('utf-8').strip()
+
+        context.logger.info(f"Compilation Done building Google Compute Image: {binary_file_name}")
+
+        image_name = client.containers.run(
+            "europe-docker.pkg.dev/bdspro/eu.gcr.io/virtio-mkimage",
+            [binary_file_name]
         ).decode('utf-8').strip()
 
         context.logger.info(f"Image: {image_name} was created. Labeling the Image")

@@ -2,18 +2,13 @@
 set -e # Abort on failure
 
 # Set default values for the arguments
-NAME=""
 CONFIGURE_ARGS=""
-PROJECT_ID="bdspro"
 
 # Check if the required arguments are provided
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 IMAGE_NAME GITHUB_TOKEN [CONFIGURE_ARGS]"
+  echo "Usage: $0 GITHUB_TOKEN [CONFIGURE_ARGS]"
   exit 1
 fi
-
-NAME=$1
-shift
 
 GITHUB_TOKEN=$1
 shift
@@ -45,10 +40,6 @@ fi
 
 (cd "$WORKDIR" && kraft prepare && kraft build -j 2) >/dev/null
 
-solo5-virtio-mkimage.sh -f tar -- unikraft.tar.gz "${WORKDIR}/build/testoperator_kvm-x86_64" > /dev/null
+gsutil cp "${WORKDIR}/build/testoperator_kvm-x86_64" "gs://unikraft/unikraft_kvm-x86_64_${UNIQUE_ID}" > /dev/null
 
-gsutil cp unikraft.tar.gz "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz" > /dev/null
-
-gcloud compute images --project "${PROJECT_ID:-bdspro}" create "$NAME" --family=unikraft --source-uri "gs://unikraft/unikraft-${UNIQUE_ID}.tar.gz" > /dev/null
-
-echo "$NAME"
+echo "unikraft_kvm-x86_64_${UNIQUE_ID}"
