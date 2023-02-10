@@ -64,4 +64,4 @@ WORKDIR /usr/src
 COPY ./build.sh /sbin
 COPY ./solo5-virtio-mkimage.sh /sbin
 
-ENTRYPOINT [ "/bin/bash", "-c", "eval $(opam env) && /bin/bash" ]
+ENTRYPOINT ["/sbin/build.sh"]

@@ -6,7 +6,7 @@ import socket
 import subprocess
 import threading
 import time
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
 
 import docker
 from docker.errors import ContainerError
@@ -236,7 +236,7 @@ def sink_is_done(sink_measurements: dict):
         active_test_context.stop_event.set()
 
 
-def get_description_from_image_name(image_name: str) -> (str, str):
+def get_description_from_image_name(image_name: str) -> Tuple[str, str]:
     rexp = re.compile(r'(mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
     matched = rexp.match(image_name)
     if not matched:
@@ -247,7 +247,7 @@ def get_description_from_image_name(image_name: str) -> (str, str):
     return framework, operator
 
 
-def build_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
+def build_unikraft_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
                        source_address, sink_port,
                        sink_address, operator,
                        github_token):
@@ -283,6 +283,20 @@ def build_docker_image(context: TestContext, image_name: str, control_port, cont
         context.logger.error(e)
         raise ExperimentFailedException("Cannot build unikraft image")
 
+def build_mirage_docker_image(ip_addrs, operator, github_token):
+    client = docker.DockerClient()
+
+    # TODO: Florian make sure the docker build returns the image_name
+    image_name = client.containers.run(
+        "europe-docker.pkg.dev/bdspro/eu.gcr.io/mirageos-gcp-image-builder",
+        [f"mirage-{operator}", github_token, "-u", "-t", "virtio", f"--op={operator}"] + ip_addrs,
+    ).encode('utf-8').strip()
+
+    # TODO: Florian label the image
+
+    # launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, , control_port,
+    #                                source_address, source_port, sink_address, sink_port)
+    return image_name
 
 def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -> str:
     image_name = message.image_name
@@ -322,10 +336,9 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
             context.logger.info(f'Force Rebuild. Building new image...')
 
         if framework == 'mirage':
-            subprocess.run(
-                [f'mirage/build.sh', latest_image_name, github_token, '-t', 'virtio', f'--op={operator}'] + ip_addrs)
+            latest_image_name = build_mirage_docker_image(ip_addrs, operator, github_token)
         else:
-            latest_image_name = build_docker_image(context, latest_image_name, control_port, control_address,
+            latest_image_name = build_unikraft_docker_image(context, latest_image_name, control_port, control_address,
                                                    source_port, source_address,
                                                    sink_port,
                                                    sink_address,
