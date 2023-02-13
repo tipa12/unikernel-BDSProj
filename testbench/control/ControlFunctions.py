@@ -6,9 +6,10 @@ import socket
 import subprocess
 import threading
 import time
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
 
 import docker
+from docker.errors import ContainerError
 
 import launcher
 from testbench.common.CustomGoogleCloudStorage import store_evaluation_in_bucket
@@ -35,7 +36,7 @@ class TestContext:
         self.sink_is_done: bool = False
 
         self.uut_serial_log: str | None = None
-        self.instance_clean_up: Callable = None
+        self.instance_clean_up: Callable = lambda: None
         self.boot_socket: socket.socket | None = None
 
         self.source_measurements: dict | None = None
@@ -65,7 +66,10 @@ class TestContext:
 def clean_up_gcp(context: TestContext, project, zone, instance_name):
     context.uut_serial_log = launcher.print_serial_output(project, zone, instance_name)
     context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
-    launcher.delete_instance(project, zone, instance_name)
+    try:
+        launcher.delete_instance(project, zone, instance_name)
+    except Exception as e:
+        context.logger.error(e)
 
 
 def clean_up_locally(context: TestContext, p):
@@ -234,7 +238,7 @@ def sink_is_done(sink_measurements: dict):
         active_test_context.stop_event.set()
 
 
-def get_description_from_image_name(image_name: str) -> (str, str):
+def get_description_from_image_name(image_name: str) -> Tuple[str, str]:
     rexp = re.compile(r'(mirage|unikraft)-(filter|map|average|identity)(-\w+)?')
     matched = rexp.match(image_name)
     if not matched:
@@ -245,23 +249,56 @@ def get_description_from_image_name(image_name: str) -> (str, str):
     return framework, operator
 
 
-def build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address, operator,
+def build_unikraft_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
+                       source_address, sink_port,
+                       sink_address, operator,
                        github_token):
     client = docker.DockerClient()
-    container = client.containers.run(
-        "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
-        [f"unikraft-{operator}", github_token, "-u", "-F", "-m", "x86_64", "-p", "kvm",
-         "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR='{control_address}'",
-         "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
-         "-s", f"APPTESTOPERATOR_SOURCE_ADDR='{source_address}'",
-         "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
-         "-s", f"APPTESTOPERATOR_DESTINATION_ADDR='{sink_address}'",
-         "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
-         ],
-        detach=True
-    )
-    container.wait()
+    try:
+        context.logger.info("Launching docker build for unikraft")
+        binary_file_name = client.containers.run(
+            "europe-docker.pkg.dev/bdspro/eu.gcr.io/unikraft-gcp-image-builder",
+            [github_token, "-F", "-m", "x86_64", "-p", "kvm",
+             "-s", f"APPTESTOPERATOR_TESTBENCH_ADDR={control_address}",
+             "-s", f"APPTESTOPERATOR_TESTBENCH_PORT={control_port}",
+             "-s", f"APPTESTOPERATOR_SOURCE_ADDR={source_address}",
+             "-s", f"APPTESTOPERATOR_SOURCE_PORT={source_port}",
+             "-s", f"APPTESTOPERATOR_DESTINATION_ADDR={sink_address}",
+             "-s", f"APPTESTOPERATOR_DESTINATION_PORT={sink_port}"
+             ]
+        ).decode('utf-8').strip()
 
+        context.logger.info(f"Compilation Done building Google Compute Image: {binary_file_name}")
+
+        image_name = client.containers.run(
+            "europe-docker.pkg.dev/bdspro/eu.gcr.io/virtio-mkimage",
+            [binary_file_name]
+        ).decode('utf-8').strip()
+
+        context.logger.info(f"Image: {image_name} was created. Labeling the Image")
+        launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, control_address, control_port,
+                                       source_address, source_port, sink_address, sink_port)
+        context.logger.info(f"Labeling done")
+
+        return image_name
+    except ContainerError as e:
+        context.logger.error(e)
+        raise ExperimentFailedException("Cannot build unikraft image")
+
+def build_mirage_docker_image(ip_addrs, operator, github_token):
+    client = docker.DockerClient()
+
+    # TODO: Florian make sure the docker build returns the image_name
+    image_name = client.containers.run(
+        "europe-docker.pkg.dev/bdspro/eu.gcr.io/mirageos-gcp-image-builder",
+        [f"mirage-{operator}", github_token, "-u", "-t", "virtio", f"--op={operator}"] + ip_addrs,
+    ).encode('utf-8').strip()
+
+    # TODO: Florian label the image
+
+    # launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, , control_port,
+    #                                source_address, source_port, sink_address, sink_port)
+    return image_name
 
 def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -> str:
     image_name = message.image_name
@@ -284,34 +321,31 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
     if control_address is not None and control_port is not None:
         ip_addrs += [f'--control-address={control_address}', f'--control-port={control_port}']
 
-    # deploy unikernel on google cloud
-    project = 'bdspro'
-    zone = 'europe-west3-a'
-    image_url = f'projects/bdspro/global/images/{image_name}'
+    framework, operator = get_description_from_image_name(image_name)
 
-    framework, _ = get_description_from_image_name(image_name)
+    image = launcher.find_image_that_matches_configuration(control_port, control_address, source_port, source_address,
+                                                           sink_port, sink_address, operator, framework)
 
-    image = launcher.get_image_from_family(project, framework)
-    if image is None:
-        context.logger.info(f'No image was found for family "{framework}". Building new image...')
-        timestr = time.strftime('%Y%m%d-%H%M%S')
-        latest_image_name = f'{framework}-{operator}-{timestr}'
+    if image is None or message.force_rebuild:
+        timestr = time.strftime('%y%m%d-%H%M%S')
+        # image names are limited to 19 characters
+        latest_image_name = f'{framework[0]}-{operator[0]}-{timestr[2:]}'
+
+        if image is None:
+            context.logger.info(f'No image was found for family "{framework}". Building new image...')
+
+        if message.force_rebuild:
+            context.logger.info(f'Force Rebuild. Building new image...')
 
         if framework == 'mirage':
-            subprocess.run(
-                [f'mirage/build.sh', latest_image_name, github_token, '-t', 'virtio', f'--op={operator}'] + ip_addrs)
+            latest_image_name = build_mirage_docker_image(ip_addrs, operator, github_token)
         else:
-            build_docker_image(control_port, control_address, source_port, source_address, sink_port, sink_address,
-                               operator, github_token)
+            latest_image_name = build_unikraft_docker_image(context, latest_image_name, control_port, control_address,
+                                                   source_port, source_address,
+                                                   sink_port,
+                                                   sink_address,
+                                                   operator, github_token)
     else:
         latest_image_name = image.name
 
-    image = launcher.get_image_from_url(project, image_url)
-    if image is None:
-        context.logger.info(f'Image {image_url} not found; falling back to latest image from family "{framework}".')
-    else:
-        latest_image_name = image.name
-
-    image_url = f'projects/bdspro/global/images/{latest_image_name}'
-
-    return image_url
+    return latest_image_name

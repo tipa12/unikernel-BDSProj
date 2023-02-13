@@ -60,7 +60,7 @@ class ResponseMeasurementsMessage:
 
     def __str__(self) -> str:
         as_str = "ResponseMeasurementsMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -76,6 +76,7 @@ class StartExperimentMessage:
 
         assert get_service_type(message) == START_EXPERIMENT
         data = get_data(message)
+        self.force_rebuild = data['force_rebuild']
         self.control_port = data['control_port']
         self.control_address = data['control_address']
         self.sink_port = data['sink_port']
@@ -94,7 +95,7 @@ class StartExperimentMessage:
 
     def __str__(self) -> str:
         as_str = "StartExperimentMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -110,7 +111,7 @@ class AbortExperimentMessage:
 
     def __str__(self) -> str:
         as_str = "AbortExperimentMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
@@ -132,23 +133,17 @@ class ThroughputStartMessage:
 
     def __str__(self) -> str:
         as_str = "ThroughputStartMessage\n"
-        for k, v in vars(self):
+        for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
 
 
-def start_experiment(control_port: int,
-                     control_address: str,
-                     sink_port: int,
-                     sink_address: str,
-                     source_port: int,
-                     source_address: str,
-                     operator: str,
-                     github_token: str,
-                     image_name: str, iterations: int, delay: float, ramp_factor: float, test_id: str,
-                     dataset_id: str,
-                     evaluation_id: str):
+def start_experiment(control_port: int, control_address: str, sink_port: int, sink_address: str, source_port: int,
+                     source_address: str, operator: str, github_token: str, image_name: str, iterations: int,
+                     delay: float, ramp_factor: float, test_id: str, dataset_id: str, evaluation_id: str,
+                     force_rebuild: bool):
     data = {
+        'force_rebuild': force_rebuild,
         'control_port': control_port,
         'control_address': control_address,
         'sink_port': sink_port,

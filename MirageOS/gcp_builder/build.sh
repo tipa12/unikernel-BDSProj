@@ -1,6 +1,13 @@
 #!/bin/bash
-
+set -x
 set -e # Abort on failure
+
+function finish {
+  echo "Deleting instance"
+  gcloud compute instances delete --zone "$ZONE" --project "$PROJECT_ID" "$HOSTNAME"
+}
+
+trap finish EXIT
 
 # Set default values for the arguments
 NAME=""
@@ -66,6 +73,10 @@ echo "Uploading image to Google Cloud Storage..."
 gsutil cp mirageos.tar.gz gs://mirageos/mirageos-${UNIQUE_ID}.tar.gz
 
 echo "Creating image on Google Compute Engine..."
-gcloud compute images -q create $NAME --source-uri gs://mirageos/mirageos-${UNIQUE_ID}.tar.gz --family mirageos
+if [ -z "$REPLACE" ]; then
+  gcloud compute images -q create $NAME --source-uri gs://mirage/mirage-${UNIQUE_ID}.tar.gz --family mirageos
+else
+  gcloud compute images --force-create -q create $NAME --source-uri gs://mirage/mirage-${UNIQUE_ID}.tar.gz --family mirageos
+fi
 
 echo "Done."

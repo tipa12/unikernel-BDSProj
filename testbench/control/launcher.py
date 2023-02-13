@@ -1,10 +1,10 @@
 import re
 import sys
-import subprocess
-from typing import Any, List, Optional
 import warnings
+from typing import Any, List, Optional
 
 import google
+import iso8601
 from google.api_core.exceptions import NotFound
 from google.api_core.extended_operation import ExtendedOperation
 from google.cloud import compute_v1
@@ -17,6 +17,74 @@ def get_image_from_url(project: str, image_url: str) -> Optional[compute_v1.Imag
         return newest_image
     except NotFound:
         return None
+
+
+def encode_ip(ip: str):
+    return ip.replace(".", "-")
+
+
+def find_image_that_matches_configuration(control_port: int, control_address: str, source_port: int,
+                                          source_address: str, sink_port: int,
+                                          sink_address: str, operator: str, framework: str):
+    image_client = compute_v1.ImagesClient()
+
+    filter_by_label = " AND ".join([f"labels.{k} = \"{v}\"" for k, v in {
+        'framework': framework,
+        'operator': operator,
+        'control_addr': encode_ip(control_address),
+        'source_addr': encode_ip(source_address),
+        'sink_addr': encode_ip(sink_address),
+        'control_port': str(control_port),
+        'source_port': str(source_port),
+        'sink_port': str(sink_port),
+    }.items()])
+
+    request = compute_v1.types.ListImagesRequest(mapping={
+        "filter": filter_by_label,
+        "project": "bdspro"
+    })
+
+    result = image_client.list(request=request)
+
+    newest = None
+    for page in result.pages:
+        for image in page.items:
+            if image.deprecated:
+                continue
+
+            if newest is None:
+                newest = image
+            current_date = iso8601.parse_date(image.creation_timestamp)
+            newest_date = iso8601.parse_date(newest.creation_timestamp)
+            if current_date > newest_date:
+                newest = image
+
+    return newest
+
+
+def label_unikernel_image(project: str, image_name: str, framework: str, operator: str, control_addr: str,
+                          control_port: int,
+                          source_addr: str, source_port: int, sink_addr: str, sink_port: int):
+    image_client = compute_v1.ImagesClient()
+    image = image_client.get(project=project, image=image_name)
+
+    labels = {
+        'framework': framework,
+        'operator': operator,
+        'control_addr': encode_ip(control_addr),
+        'source_addr': encode_ip(source_addr),
+        'sink_addr': encode_ip(sink_addr),
+        'control_port': str(control_port),
+        'source_port': str(source_port),
+        'sink_port': str(sink_port),
+    }
+    setLabelRequest = compute_v1.types.GlobalSetLabelsRequest(mapping={
+        "labels": labels,
+        "label_fingerprint": image.label_fingerprint
+    })
+
+    image_client.set_labels_unary(project=project, resource=image_name,
+                                  global_set_labels_request_resource=setLabelRequest)
 
 
 def get_image_from_family(project: str, family: str) -> Optional[compute_v1.Image]:

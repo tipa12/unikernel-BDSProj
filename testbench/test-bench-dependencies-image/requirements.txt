@@ -12,7 +12,7 @@ google-api-python-client==2.70.0
 google-auth==2.15.0
 google-auth-httplib2==0.1.0
 google-cloud==0.34.0
-google-cloud-compute==1.8.0
+google-cloud-compute==1.10.0
 google-cloud-core==2.3.2
 google-cloud-firestore==2.7.3
 google-cloud-storage==2.7.0
@@ -45,3 +45,4 @@ urllib3==1.26.13
 websocket-client==1.4.2
 Werkzeug==2.2.2
 psutil==5.9.4
+iso8601==1.1.0
