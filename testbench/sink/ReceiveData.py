@@ -5,6 +5,7 @@ import struct
 import threading
 import time
 import gc
+from datetime import datetime
 from typing import Union
 
 import testbench.common.CustomGoogleCloudStorage as gcs
@@ -20,6 +21,11 @@ class TestContext:
     def __init__(self, logger: logging.Logger) -> None:
         super().__init__()
 
+        self.start_timestamp: float | None = None
+        self.start_datetime: datetime | None = None
+
+        self.done_timestamp: float | None = None
+
         self.sink_socket: socket.socket | None = None
 
         self.initial_packet_stats: PacketStats | None = None
@@ -27,17 +33,19 @@ class TestContext:
         self.diff_packet_stats: PacketStats | None = None
 
         self.tuples_received_timestamps = []
-        self.tuple_ids_received = []
         self.number_of_tuples_recv = 0
 
         self.logger = logger
-
+        self.abort_or_error = True
         self.stop_event = threading.Event()
 
     def get_measurements(self) -> dict:
         return {
+            "abort_or_error": self.abort_or_error,
+            "start_timestamp": self.start_timestamp,
+            "start_datetime": self.start_datetime,
+            "done_timestamp": self.done_timestamp,
             "tuples_received_timestamps": self.tuples_received_timestamps,
-            # "tuple_ids_received": self.tuple_ids_received,
             "number_of_tuples_recv": self.number_of_tuples_recv,
             "packets": vars(self.diff_packet_stats),
         }
@@ -93,6 +101,7 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
 
         if len(data) % TUPLE_SIZE_IN_BYTES != 0:
             if len(data) % TUPLE_SIZE_IN_BYTES == 4:
+                context.done_timestamp = time.perf_counter()
                 print(data[-4:])
                 assert data[-4:] == b"DONE"
                 client_socket.send(b"ACK")
@@ -100,7 +109,6 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
 
         for i in range(len(data) // TUPLE_SIZE_IN_BYTES):
             received_tuple = struct.unpack(f'!5i', data[i * TUPLE_SIZE_IN_BYTES:(i + 1) * TUPLE_SIZE_IN_BYTES])
-            context.tuple_ids_received.append(received_tuple[1])
             if context.number_of_tuples_recv % scale // 10 == 0:
                 context.tuples_received_timestamps.append(time.perf_counter())
 
@@ -141,6 +149,8 @@ def test_tuple_throughput_receiver(context: TestContext, scale):
 
             # Accept a single incoming connection
             client_socket, client_address = server_socket.accept()
+            context.start_datetime = datetime.now()
+            context.start_timestamp = time.perf_counter()
             context.logger.info(f"Receiver: Accepted a connection from {client_address}")
 
             context.initial_packet_stats = PacketStats()
@@ -170,6 +180,7 @@ def receive_data(message: ThroughputStartMessage, logger):
         active_test_context.diff_packet_stats = \
             diff(active_test_context.initial_packet_stats, active_test_context.final_packet_stats)
 
+        active_test_context.abort_or_error = False
         gcs.store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'sink', message.test_id)
 
         response_measurements('sink', {})
@@ -186,5 +197,6 @@ def abort_current_experiment(logger: logging.Logger):
     global active_test_context
 
     if active_test_context is not None:
+        active_test_context.abort_or_error = True
         logger.warning(f"Request aborting the experiment")
         active_test_context.stop_event.set()
