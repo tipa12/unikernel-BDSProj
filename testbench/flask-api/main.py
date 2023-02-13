@@ -119,6 +119,8 @@ def new_experiment_endpoint():
     operator = request.args.get('operator', 'identity')
     delay = float(request.args.get('delay', 0.1))
     iterations = int(request.args.get('iterations', 100))
+    restarts = int(request.args.get('restarts', 0))
+    sampling_rate = int(request.args.get('samplingRate', 100))
     force_rebuild = request.args.get('forceRebuild').lower() == 'true'
     ramp_factor = 1.02
 
@@ -126,7 +128,7 @@ def new_experiment_endpoint():
 
     start_experiment(control_port, control_address, sink_port, sink_address, source_port, source_address, operator,
                      github_token, image_name, iterations, delay, ramp_factor, experiment_id, dataset_id, evaluation_id,
-                     force_rebuild)
+                     force_rebuild, sampling_rate, restarts)
 
     # return datasetId, evaluationId, parameters
     response = {
