@@ -1,3 +1,4 @@
+import datetime
 import gc
 import logging
 import select
@@ -20,8 +21,6 @@ class TestContext:
     def __init__(self, logger: logging.Logger) -> None:
         super().__init__()
 
-        self.adjust_backpressure_timestamps = []
-        self.adjust_backpressure_acks_timestamps = []
         self.source_socket: socket.socket | None = None
 
         self.initial_packet_stats: PacketStats | None = None
@@ -32,8 +31,22 @@ class TestContext:
         self.number_of_tuples_sent = 0
         self.qualifying_tuple_ids = []
         self.number_of_tuples_passing_the_filter = 0
+
+        # Perf Counter @ Real Timestamp
         self.start_timestamp: float | None = None
-        self.stop_timestamp: float | None = None
+        # Real Timestamp
+        self.start_datetime: datetime.datetime | None = None
+
+        # After SEND TUPLES
+        self.first_tuple_timestamp: float | None = None
+
+        # before DONE
+        self.last_tuple_timestamp: float | None = None
+        # after ACK
+        self.ack_timestamp: float | None = None
+
+        self.back_pressure: [(float, float)] = []
+        self.error_or_aborted = True
 
         self.logger = logger
 
@@ -41,12 +54,17 @@ class TestContext:
 
     def get_measurements(self) -> dict:
         return {
+            "error_or_aborted": self.error_or_aborted,
             "tuples_sent_timestamps": self.tuple_timestamps,
             "number_of_tuples_sent": self.number_of_tuples_sent,
             "number_of_tuples_passing_the_filter": self.number_of_tuples_passing_the_filter,
-            "qualifying_tuple_ids": self.qualifying_tuple_ids,
             "start_timestamp": self.start_timestamp,
-            "stop_timestamp": self.stop_timestamp,
+            "start_datetime": self.start_datetime,
+            "first_tuple_timestamp": self.first_tuple_timestamp,
+            "last_tuple_timestamp": self.last_tuple_timestamp,
+            "qualifying_tuple_ids": self.qualifying_tuple_ids,
+            "ack_timestamp": self.ack_timestamp,
+            "back_pressure": [{"back": x, "ack": y} for x, y in self.back_pressure],
             "packets": vars(self.diff_packet_stats),
         }
 
@@ -58,9 +76,10 @@ class TestContext:
 def close_connection(context: TestContext, client_socket: socket.socket):
     context.logger.info("Closing Connection")
     client_socket.setblocking(True)
+    context.last_tuple_timestamp = time.perf_counter()
     client_socket.send(b"DONE")
     ack_message = client_socket.recv(4)
-    context.stop_timestamp = time.perf_counter()
+    context.ack_timestamp = time.perf_counter()
     context.logger.info("Waiting for ACK")
     context.logger.info(f"{ack_message}")
     assert ack_message == b"ACK"
@@ -70,14 +89,15 @@ def close_connection(context: TestContext, client_socket: socket.socket):
 
 def backpressure_adjustment(context: TestContext, client_socket: socket.socket):
     context.logger.info("Backpressure Adjustment")
+    back_timestamp = time.perf_counter()
     client_socket.setblocking(True)
-    context.adjust_backpressure_timestamps.append(time.perf_counter())
     client_socket.send(b"BACK")
     context.logger.info("Waiting for ACK")
     ack_message = client_socket.recv(4)
-    context.adjust_backpressure_acks_timestamps.append(time.perf_counter())
     assert ack_message == b"ACK"
+    ack_timestamp = time.perf_counter()
     context.logger.info("Backpressure Adjusted")
+    context.back_pressure.append((back_timestamp, ack_timestamp))
     client_socket.setblocking(False)
 
 
@@ -95,7 +115,7 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
     start_message = client_socket.recv(len("SEND TUPLES!"))
     assert start_message == b"SEND TUPLES!"
     client_socket.setblocking(False)
-    context.start_timestamp = time.perf_counter()
+    context.first_tuple_timestamp = time.perf_counter()
     time_stamp = time.perf_counter()
 
     for _ in range(scale):
@@ -206,6 +226,7 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
 
             # Accept a single incoming connection
             client_socket, client_address = server_socket.accept()
+            context.set_start_timestamp = (datetime.datetime.now(), time.perf_counter())
 
             if socket_opts:
                 assert client_socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK) == 1
@@ -222,7 +243,7 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
 active_test_context: Union[TestContext, None] = None
 
 
-def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05) -> TestContext:
+def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05):
     global active_test_context
 
     if active_test_context is not None:
@@ -237,6 +258,7 @@ def test_gcp(test_id: str, data, delay, iterations, logger, ramp_factor=1.05) ->
         active_test_context.diff_packet_stats = \
             diff(active_test_context.initial_packet_stats, active_test_context.final_packet_stats)
 
+        active_test_context.error_or_aborted = False
         gcs.store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'source', test_id)
 
         response_measurements('source', {})
@@ -253,6 +275,7 @@ def abort_current_experiment(logger: logging.Logger):
     global active_test_context
 
     if active_test_context is not None:
+        active_test_context.error_or_aborted = True
         logger.warning(f"Request aborting the experiment")
         active_test_context.stop_event.set()
 
