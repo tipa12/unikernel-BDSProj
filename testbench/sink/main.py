@@ -3,7 +3,7 @@ import time
 
 from testbench.common.LoggingFunctions import create_logger
 import ReceiveData as rd
-from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_sink
+from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_sink, RestartMessage
 
 logger = create_logger('sink')
 
@@ -17,6 +17,8 @@ def callback(message):
         rd.receive_data(start_throughput_message, logger)
     elif AbortExperimentMessage.is_of_type(message):
         rd.abort_current_experiment(logger)
+    elif RestartMessage.is_of_type(message):
+        rd.restart_current_experiment(logger)
     else:
         service_type = message.attributes['serviceType']
         logger.error('Unknown serviceType: {}'.format(service_type))

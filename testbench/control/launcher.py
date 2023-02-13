@@ -62,6 +62,11 @@ def find_image_that_matches_configuration(control_port: int, control_address: st
     return newest
 
 
+def reset_vm(project: str, zone: str, instance_name: str):
+    client = compute_v1.InstancesClient()
+    client.reset(project=project, zone=zone, instance=instance_name)
+
+
 def label_unikernel_image(project: str, image_name: str, framework: str, operator: str, control_addr: str,
                           control_port: int,
                           source_addr: str, source_port: int, sink_addr: str, sink_port: int):
@@ -106,11 +111,11 @@ def get_image_from_family(project: str, family: str) -> Optional[compute_v1.Imag
 
 
 def disk_from_image(
-    disk_type: str,
-    disk_size_gb: int,
-    boot: bool,
-    source_image: str,
-    auto_delete: bool = True,
+        disk_type: str,
+        disk_size_gb: int,
+        boot: bool,
+        source_image: str,
+        auto_delete: bool = True,
 ) -> compute_v1.AttachedDisk:
     """
     Create an AttachedDisk object to be used in VM instance creation. Uses an image as the
