@@ -21,7 +21,7 @@ PORT = 8081
 
 class TestContext:
 
-    def __init__(self, logger: logging.Logger, test_id: str) -> None:
+    def __init__(self, logger: logging.Logger, message: StartExperimentMessage, test_id: str) -> None:
         super().__init__()
         self.logger = logger
         logger: logging.Logger
@@ -41,6 +41,7 @@ class TestContext:
 
         self.source_measurements: dict | None = None
         self.sink_measurements: dict | None = None
+        self.configuration: StartExperimentMessage = message
 
     def get_measurements(self) -> dict:
         return {
@@ -49,6 +50,7 @@ class TestContext:
             "serial_log": self.uut_serial_log,
             "source_measurements": self.source_measurements,
             "sink_measurements": self.sink_measurements,
+            "configuration": vars(self.configuration)
         }
 
     def clean_up(self):
@@ -172,7 +174,7 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
     if active_test_context is not None:
         raise ExperimentAlreadyRunningException()
 
-    active_test_context = TestContext(logger, message.test_id)
+    active_test_context = TestContext(logger, message, message.test_id)
 
     try:
         image_name = ensure_image_exists(active_test_context, message)
