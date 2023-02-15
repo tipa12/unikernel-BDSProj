@@ -8,6 +8,7 @@ app = Flask(__name__)
 
 logger = log.create_logger('flask-api')
 
+
 @app.route('/')
 def root():
     return 'Please give an argument to the URL.'
@@ -105,7 +106,6 @@ def abortExperiment():
 
 @app.route('/newExperiment')
 def new_experiment_endpoint():
-
     dataset_id = request.args.get('datasetId')
     evaluation_id = request.args.get('evaluationId')
     image_name = request.args.get('imageName')
@@ -122,13 +122,17 @@ def new_experiment_endpoint():
     restarts = int(request.args.get('restarts', 0))
     sample_rate = int(request.args.get('sampleRate', 100))
     force_rebuild = request.args.get('forceRebuild').lower() == 'true'
+    tuple_format = request.args.get('tupleFormat', "binary").lower()
     ramp_factor = 1.02
+
+    if tuple_format not in ("json", "binary"):
+        tuple_format = "binary"
 
     experiment_id = uid.generateUniqueExperimentId()
 
     start_experiment(control_port, control_address, sink_port, sink_address, source_port, source_address, operator,
                      github_token, image_name, iterations, delay, ramp_factor, experiment_id, dataset_id, evaluation_id,
-                     force_rebuild, sample_rate, restarts)
+                     force_rebuild, sample_rate, restarts, tuple_format)
 
     # return datasetId, evaluationId, parameters
     response = {

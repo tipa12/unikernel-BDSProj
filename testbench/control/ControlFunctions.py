@@ -273,7 +273,7 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
 
         # Launch initial experiment
         throughput_start(message.test_id, message.iterations, message.delay, message.ramp_factor,
-                         message.dataset_id, message.sample_rate, message.restarts)
+                         message.dataset_id, message.sample_rate, message.restarts, message.tuple_format)
 
         test_boot_time(active_test_context)
 
@@ -346,10 +346,12 @@ def get_description_from_image_name(image_name: str) -> Tuple[str, str]:
     return framework, operator
 
 
-def build_unikraft_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
+def build_unikraft_docker_image(context: TestContext, control_port, control_address, source_port,
                                 source_address, sink_port,
                                 sink_address, operator,
-                                github_token):
+                                github_token,
+                                tuple_format: str):
+    # TODO: Support Tuple format for Unikraft
     client = docker.DockerClient()
     try:
         context.logger.info("Launching docker build for unikraft")
@@ -374,7 +376,7 @@ def build_unikraft_docker_image(context: TestContext, image_name: str, control_p
 
         context.logger.info(f"Image: {image_name} was created. Labeling the Image")
         launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, control_address, control_port,
-                                       source_address, source_port, sink_address, sink_port)
+                                       source_address, source_port, sink_address, sink_port, tuple_format)
         context.logger.info(f"Labeling done")
 
         return image_name
@@ -423,7 +425,8 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
     framework, operator = get_description_from_image_name(image_name)
 
     image = launcher.find_image_that_matches_configuration(control_port, control_address, source_port, source_address,
-                                                           sink_port, sink_address, operator, framework)
+                                                           sink_port, sink_address, operator, framework,
+                                                           message.tuple_format)
 
     if image is None or message.force_rebuild:
         timestr = time.strftime('%y%m%d-%H%M%S')
@@ -439,11 +442,11 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
         if framework == 'mirage':
             latest_image_name = build_mirage_docker_image(ip_addrs, operator, github_token)
         else:
-            latest_image_name = build_unikraft_docker_image(context, latest_image_name, control_port, control_address,
+            latest_image_name = build_unikraft_docker_image(context, control_port, control_address,
                                                             source_port, source_address,
                                                             sink_port,
                                                             sink_address,
-                                                            operator, github_token)
+                                                            operator, github_token, message.tuple_format)
     else:
         latest_image_name = image.name
 

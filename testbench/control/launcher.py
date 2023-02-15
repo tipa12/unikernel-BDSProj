@@ -25,7 +25,7 @@ def encode_ip(ip: str):
 
 def find_image_that_matches_configuration(control_port: int, control_address: str, source_port: int,
                                           source_address: str, sink_port: int,
-                                          sink_address: str, operator: str, framework: str):
+                                          sink_address: str, operator: str, framework: str, tuple_format: str):
     image_client = compute_v1.ImagesClient()
 
     filter_by_label = " AND ".join([f"labels.{k} = \"{v}\"" for k, v in {
@@ -37,6 +37,7 @@ def find_image_that_matches_configuration(control_port: int, control_address: st
         'control_port': str(control_port),
         'source_port': str(source_port),
         'sink_port': str(sink_port),
+        'tuple_format': tuple_format,
     }.items()])
 
     request = compute_v1.types.ListImagesRequest(mapping={
@@ -69,7 +70,7 @@ def reset_vm(project: str, zone: str, instance_name: str):
 
 def label_unikernel_image(project: str, image_name: str, framework: str, operator: str, control_addr: str,
                           control_port: int,
-                          source_addr: str, source_port: int, sink_addr: str, sink_port: int):
+                          source_addr: str, source_port: int, sink_addr: str, sink_port: int, tuple_format: str):
     image_client = compute_v1.ImagesClient()
     image = image_client.get(project=project, image=image_name)
 
@@ -82,7 +83,9 @@ def label_unikernel_image(project: str, image_name: str, framework: str, operato
         'control_port': str(control_port),
         'source_port': str(source_port),
         'sink_port': str(sink_port),
+        'tuple_format': tuple_format,
     }
+
     setLabelRequest = compute_v1.types.GlobalSetLabelsRequest(mapping={
         "labels": labels,
         "label_fingerprint": image.label_fingerprint
