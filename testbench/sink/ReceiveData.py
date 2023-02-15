@@ -89,7 +89,7 @@ def receive_non_blocking(context: TestContext, client_socket: socket.socket):
         try:
             data = client_socket.recv(TUPLE_SIZE_IN_BYTES * 100)
             break
-        except BlockingIOError as e:
+        except socket.timeout as e:
             if context.stop_event.is_set():
                 raise ExperimentAbortedException()
 
@@ -116,7 +116,7 @@ def receive_non_blocking(context: TestContext, client_socket: socket.socket):
 
 
 def handle_client_receiver_json(client_socket: socket.socket, context: TestContext, scale: int):
-    client_socket.setblocking(False)
+    client_socket.settimeout(0.1)
     time_stamp = time.perf_counter()
 
     context.last_time_stamp = time_stamp
@@ -161,15 +161,17 @@ def handle_client_receiver_json(client_socket: socket.socket, context: TestConte
 
                 context.current_measurement.number_of_tuples_recv += 1
             except json.decoder.JSONDecodeError as e:
-                raise ExperimentFailedException(f"Invalid json {e}")
+                overflow = data[pos:]
+                break
 
-        overflow = data[pos:]
+            if pos == len(data):
+                overflow = ''
 
     context.logger.info("Receiving Done!")
 
 
 def handle_client_receiver_binary(client_socket: socket.socket, context: TestContext, scale: int):
-    client_socket.setblocking(False)
+    client_socket.settimeout(0.1)
     time_stamp = time.perf_counter()
     context.last_time_stamp = time_stamp
     context.number_of_tuples_sent_before_last_delta = 0
@@ -204,7 +206,7 @@ def test_tuple_throughput_receiver(context: TestContext, scale, tuple_format: st
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.setblocking(False)
+    server_socket.settimeout(0.1)
     context.sink_socket = server_socket
 
     # Bind the socket to a local address and port

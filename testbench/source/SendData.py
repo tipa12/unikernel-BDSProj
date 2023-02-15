@@ -109,62 +109,52 @@ def close_connection(context: TestContext, client_socket: socket.socket):
 def backpressure_adjustment(context: TestContext, client_socket: socket.socket):
     context.logger.info("Backpressure Adjustment")
     back_timestamp = time.perf_counter()
-    client_socket.setblocking(True)
+    client_socket.settimeout(None)
     client_socket.send(b"BACK")
     context.logger.info("Waiting for ACK")
     ack_message = client_socket.recv(4)
+    client_socket.settimeout(0.1)
     assert ack_message == b"ACK"
     ack_timestamp = time.perf_counter()
     context.logger.info("Backpressure Adjusted")
     context.current_measurement.back_pressure.append((back_timestamp, ack_timestamp))
-    client_socket.setblocking(False)
 
 
 def wait_for_start_message(context: TestContext, client_socket: socket.socket):
+    client_socket.settimeout(None)
     start_message = client_socket.recv(len("SEND TUPLES!"))
     assert start_message == b"SEND TUPLES!"
-    client_socket.setblocking(False)
+    client_socket.settimeout(0.1)
     context.current_measurement.start_timestamp = time.perf_counter()
     context.last_time_stamp = context.current_measurement.start_timestamp
 
 
 def write_non_blocking(context: TestContext, client_socket: socket.socket, data: bytes):
-    # use downtime to log TPS
-    repeat_if_blocking_delay = 0.000001
-    counter = 0
     while True:
         try:
             client_socket.send(data)
             break
-        except BlockingIOError as e:
-            if counter == 0:
-                timme_delta = context.last_time_stamp
-                context.last_time_stamp = time.perf_counter()
-                timme_delta = context.last_time_stamp - timme_delta
+        except socket.timeout as e:
+            time_delta = context.last_time_stamp
+            context.last_time_stamp = time.perf_counter()
+            time_delta = context.last_time_stamp - time_delta
 
-                tuples_send_in_delta = context.current_measurement.number_of_tuples_sent - context.number_of_tuples_sent_before_last_delta
-                context.number_of_tuples_sent_before_last_delta = context.current_measurement.number_of_tuples_sent
+            tuples_send_in_delta = context.current_measurement.number_of_tuples_sent - context.number_of_tuples_sent_before_last_delta
+            context.number_of_tuples_sent_before_last_delta = context.current_measurement.number_of_tuples_sent
 
-                context.logger.info(f"TPS: {tuples_send_in_delta / timme_delta} over the last {timme_delta}s")
-                context.logger.info(
-                    f"{100 * context.current_measurement.number_of_tuples_sent / context.total_number_of_tuples}% done")
+            context.logger.info(f"TPS: {tuples_send_in_delta / time_delta} over the last {time_delta}s")
+            context.logger.info(
+                f"{100 * context.current_measurement.number_of_tuples_sent / context.total_number_of_tuples}% done")
 
             if context.stop_event.is_set():
                 raise ExperimentAbortedException()
 
-            time.sleep(repeat_if_blocking_delay)
-            counter += 1
-            if counter < 20:
-                repeat_if_blocking_delay *= 2
-            if counter == 20:
-                context.logger.info(f"Current {context.current_measurement.number_of_tuples_sent}")
-                backpressure_adjustment(context, client_socket)
-            if counter > 20:
-                context.logger.warning(f"Blocking {counter}")
+            backpressure_adjustment(context, client_socket)
 
 
 def handle_client_json(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
                        ramp_factor: float, packet_length=1):
+    client_socket.settimeout(0.1)
     context.total_number_of_tuples = len(data) * scale
     context.number_of_tuples_sent_before_last_delta = 0
     context.number_of_tuples_sent = 0
@@ -176,17 +166,30 @@ def handle_client_json(client_socket: socket.socket, context: TestContext, data,
         context.logger.info(f"Iteration: {iteration}")
         for i in range(0, date_set_len):
             tuple_data = b'{"a": %d,"b": %d,"c": %d,"d": %d,"e": %d}' % (
-                data[i][0], context.number_of_tuples_sent, data[i][2], data[i][3],
+                data[i][0], context.current_measurement.number_of_tuples_sent, data[i][2], data[i][3],
                 data[i][4])
 
             write_non_blocking(context, client_socket, tuple_data)
 
-            context.number_of_tuples_sent += packet_length
+            context.current_measurement.number_of_tuples_sent += packet_length
 
             if data[i][0]:
                 if context.current_measurement.number_of_tuples_passing_the_filter % context.sample_rate == 0:
                     context.current_measurement.tuple_timestamps.append(time.perf_counter())
                 context.current_measurement.number_of_tuples_passing_the_filter += 1
+
+            # Decrease the delay time - comment out to send data at a constant rate
+            delay *= 1 / ramp_factor
+
+            if context.stop_event.is_set():
+                raise ExperimentAbortedException()
+
+            if delay < 0.0001:
+                continue
+
+            time.sleep(delay)
+
+    close_connection(context, client_socket)
 
 
 def handle_client_binary(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
@@ -247,7 +250,7 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.setblocking(False)
+    server_socket.settimeout(0.1)
     context.source_socket = server_socket
 
     if socket_opts:
