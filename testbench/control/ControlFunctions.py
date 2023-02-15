@@ -1,6 +1,6 @@
+import datetime
 import logging
 import os
-import queue
 import re
 import socket
 import subprocess
@@ -14,43 +14,69 @@ from docker.errors import ContainerError
 import launcher
 from testbench.common.CustomGoogleCloudStorage import store_evaluation_in_bucket
 from testbench.common.experiment import *
-from testbench.common.messages import StartExperimentMessage, throughput_start, abort_experiment
+from testbench.common.messages import StartExperimentMessage, throughput_start, abort_experiment, restart_experiment
 
 PORT = 8081
+
+
+class Measurements:
+
+    def __init__(self, was_reset: bool) -> None:
+        super().__init__()
+        self.uut_serial_log = None
+        self.start_timestamp = None
+        self.start_datetime = None
+        self.boot_packet_timestamp = None
+        self.was_reset = was_reset
+
+    def get_measurements(self) -> dict:
+        return {
+            "was_reset": self.was_reset,
+            "boot_packet_timestamp": self.boot_packet_timestamp,
+            "start_unix_timestamp": time.mktime(self.start_datetime.timetuple()),
+            "start_timestamp": self.start_timestamp,
+            "serial_log": self.uut_serial_log,
+        }
 
 
 class TestContext:
 
     def __init__(self, logger: logging.Logger, message: StartExperimentMessage, test_id: str) -> None:
         super().__init__()
+        self.image_name = None
+        self.instance_name = None
+        self.boot_socket: socket.socket | None = None
         self.logger = logger
         logger: logging.Logger
         self.test_id = test_id
 
-        self.boot_packet_timestamp = None
-        self.start_timestamp = None
-
         self.stop_event: threading.Event = threading.Event()
         self.is_aborted: bool = False
         self.source_is_done: bool = False
+        self.source_waits_for_restart: bool = False
         self.sink_is_done: bool = False
+        self.sink_waits_for_restart: bool = False
 
-        self.uut_serial_log: str | None = None
         self.instance_clean_up: Callable = lambda: None
-        self.boot_socket: socket.socket | None = None
+        self.instance_get_serial: Callable = lambda: None
 
-        self.source_measurements: dict | None = None
-        self.sink_measurements: dict | None = None
         self.configuration: StartExperimentMessage = message
+
+        self.measurements: [Measurements] = []
+        self.current_measurement = Measurements(False)
+
+    def restart(self):
+        self.measurements.append(self.current_measurement)
+        self.current_measurement.uut_serial_log = self.instance_get_serial()
+        self.current_measurement = Measurements(True)
+        self.source_waits_for_restart = False
+        self.sink_waits_for_restart = False
 
     def get_measurements(self) -> dict:
         return {
-            "boot_packet_timestamp": self.boot_packet_timestamp,
-            "start_timestamp": self.start_timestamp,
-            "serial_log": self.uut_serial_log,
-            "source_measurements": self.source_measurements,
-            "sink_measurements": self.sink_measurements,
-            "configuration": vars(self.configuration)
+            "measurements": [m.get_measurements() for m in self.measurements],
+            "configuration": vars(self.configuration),
+            "image_name": self.image_name
         }
 
     def clean_up(self):
@@ -64,16 +90,21 @@ class TestContext:
 
 
 def clean_up_gcp(context: TestContext, project, zone, instance_name):
-    context.uut_serial_log = launcher.print_serial_output(project, zone, instance_name)
-    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
     try:
         launcher.delete_instance(project, zone, instance_name)
     except Exception as e:
         context.logger.error(e)
 
 
+def get_serial_gcp(context: TestContext, project, zone, instance_name):
+    serial = launcher.print_serial_output(project, zone, instance_name)
+    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{serial}\n{'#' * 20}\n")
+
+    return serial
+
+
 def clean_up_locally(context: TestContext, p):
-    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.uut_serial_log}\n{'#' * 20}\n")
+    context.logger.info(f"Unikernel Serial:\n {'#' * 20}\n{context.current_measurement.uut_serial_log}\n{'#' * 20}\n")
     p.terminate()
 
 
@@ -118,54 +149,114 @@ def launch_locally(context: TestContext, image_name: str) -> Callable:
     return lambda: clean_up_locally(context, p)
 
 
-def launch_gcp(context: TestContext, image_name: str) -> Callable:
+def launch_gcp(context: TestContext) -> Callable:
+    context.logger.info("Lauchning VM")
     # Send an HTTP request using the requests library
     project = 'bdspro'
     zone = 'europe-west1-b'
     framework = "unikraft"
     instance_name = f"{framework}-{context.test_id[len('experiment_2023-02-04T15-57-46-'):]}"
+    context.instance_name = instance_name
 
     context.start_timestamp = time.perf_counter()
     response = launcher.create_from_custom_image(project, zone, instance_name,
-                                                 f"projects/bdspro/global/images/{image_name}")
+                                                 f"projects/bdspro/global/images/{context.image_name}")
 
     return lambda: clean_up_gcp(context, project, zone, instance_name)
 
 
-def receive_udp_packet(context: TestContext, q: queue.Queue):
-    # Create a UDP socket and listen for incoming packets
+def receive_udp_packet(context: TestContext):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('0.0.0.0', PORT))
-    context.boot_socket = sock
-    # TODO: Verify data and addr
-    data, addr = sock.recvfrom(1024)
-    context.boot_packet_timestamp = time.perf_counter()
-    context.logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
+    try:
+        # Create a UDP socket and listen for incoming packets
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', PORT))
+        context.boot_socket = sock
+        # TODO: Verify data and addr
+        data, addr = sock.recvfrom(1024)
+        context.current_measurement.boot_packet_timestamp = time.perf_counter()
+        context.logger.debug(f"Received Boot Packet. Data = {data}, Addr = {addr}")
+    finally:
+        sock.close()
 
 
-def test_boot_time(context: TestContext, image_name: str, launch_fn=launch_gcp):
-    q = queue.Queue()
-    udp_thread = threading.Thread(target=receive_udp_packet, args=(context, q))
+def restart_gcp(context: TestContext):
+    try:
+        context.logger.info("Resetting Instance")
+        launcher.reset_vm('bdspro', 'europe-west1-b', context.instance_name)
+    except Exception as e:
+        context.logger.error(f"Problem when resetting VM: {e}")
+        raise ExperimentFailedException("Problem when resetting VM")
+
+
+def wait_for_unikernel_to_boot_with_timeout(timeout_in_seconds: int, thread: threading.Thread) -> bool:
+    time_left = float(timeout_in_seconds)
+
+    while time_left > 0:
+        if active_test_context.stop_event.wait(10):
+            if active_test_context.is_aborted:
+                raise ExperimentAbortedException()
+        thread.join(0.1)
+        if thread.is_alive():
+            time_left -= 0.1
+        else:
+            return True
+    return False
+
+
+def restart_unikernel(context: TestContext, reset_fn=restart_gcp):
+    udp_thread = threading.Thread(target=receive_udp_packet, args=(context,))
     udp_thread.start()
 
-    clean_up = launch_fn(context, image_name)
-    context.instance_clean_up = clean_up
+    context.current_measurement.start_datetime = datetime.datetime.now()
+    context.current_measurement.start_timestamp = time.perf_counter()
+    reset_fn(context)
 
-    if active_test_context.stop_event.wait(30):
-        if active_test_context.is_aborted:
-            raise ExperimentAbortedException()
-
-    udp_thread.join(0.1)
-
-    if udp_thread.is_alive():
+    if not wait_for_unikernel_to_boot_with_timeout(10, udp_thread):
         context.logger.error("The Unikernel did not send a boot packet in 10 seconds! Aborting the Experiment")
         raise ExperimentFailedException("Boot Packet Timeout")
 
-    context.logger.info(f"Unikernel Booted in {context.boot_packet_timestamp} - {context.start_timestamp}s.")
+    context.logger.info(
+        f"Unikernel Booted in {context.current_measurement.boot_packet_timestamp} - {context.current_measurement.start_timestamp}s.")
+
+
+def test_boot_time(context: TestContext, launch_fn=launch_gcp):
+    udp_thread = threading.Thread(target=receive_udp_packet, args=(context,))
+    udp_thread.start()
+
+    context.current_measurement.start_datetime = datetime.datetime.now()
+    context.current_measurement.start_timestamp = time.perf_counter()
+
+    clean_up = launch_fn(context)
+
+    context.instance_get_serial = lambda: get_serial_gcp(context, 'bdspro', 'europe-west1-b', context.instance_name)
+    context.instance_clean_up = clean_up
+
+    if not wait_for_unikernel_to_boot_with_timeout(20, udp_thread):
+        context.logger.error("The Unikernel did not send a boot packet in 20 seconds! Aborting the Experiment")
+        raise ExperimentFailedException("Boot Packet Timeout")
+
+    context.logger.info(
+        f"Unikernel Booted in {context.current_measurement.boot_packet_timestamp} - {context.current_measurement.start_timestamp}s.")
 
 
 active_test_context: Union[TestContext, None] = None
+
+
+def wait_for_restart(context: TestContext):
+    context.logger.info("Waiting for Source and Sink to prepare for restart")
+    context.stop_event.wait()
+
+    if context.is_aborted:
+        raise ExperimentAbortedException()
+    elif context.sink_waits_for_restart and context.source_waits_for_restart:
+        context.stop_event.clear()
+        context.restart()
+    else:
+        raise ExperimentFailedException("Expected Source and Sink to Notify when ready for next reset")
+
+    context.logger.info("Ready for restart")
+    restart_experiment()
 
 
 def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
@@ -174,25 +265,31 @@ def launch_experiment(message: StartExperimentMessage, logger: logging.Logger):
     if active_test_context is not None:
         raise ExperimentAlreadyRunningException()
 
-    active_test_context = TestContext(logger, message, message.test_id)
-
     try:
+        active_test_context = TestContext(logger, message, message.test_id)
         image_name = ensure_image_exists(active_test_context, message)
         active_test_context.image_name = image_name
-        throughput_start(message.test_id, message.iterations, message.delay, message.ramp_factor, message.dataset_id)
+        number_of_restarts = 0
 
-        # deploy unikernel on google cloud
-        boot_test = test_boot_time(active_test_context, image_name)
+        # Launch initial experiment
+        throughput_start(message.test_id, message.iterations, message.delay, message.ramp_factor,
+                         message.dataset_id, message.sample_rate, message.restarts)
+
+        test_boot_time(active_test_context)
+
+        while number_of_restarts < message.restarts:
+            wait_for_restart(active_test_context)
+            restart_unikernel(active_test_context)
+            number_of_restarts += 1
+
+        active_test_context.restart()
+        active_test_context.logger.info("Wait for source and sink to stop")
+        # Wait for source and sink to save results
         active_test_context.stop_event.wait()
         if active_test_context.is_aborted:
             raise ExperimentAbortedException()
         else:
             assert active_test_context.source_is_done and active_test_context.sink_is_done
-
-            # TODO: Hacky that the instance_clean_up method fetches the serial_logs, but clean up is called in the
-            #       finally block
-            active_test_context.instance_clean_up()
-            active_test_context.instance_clean_up = lambda: None
 
             store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'control',
                                        active_test_context.test_id)
@@ -250,9 +347,9 @@ def get_description_from_image_name(image_name: str) -> Tuple[str, str]:
 
 
 def build_unikraft_docker_image(context: TestContext, image_name: str, control_port, control_address, source_port,
-                       source_address, sink_port,
-                       sink_address, operator,
-                       github_token):
+                                source_address, sink_port,
+                                sink_address, operator,
+                                github_token):
     client = docker.DockerClient()
     try:
         context.logger.info("Launching docker build for unikraft")
@@ -285,6 +382,7 @@ def build_unikraft_docker_image(context: TestContext, image_name: str, control_p
         context.logger.error(e)
         raise ExperimentFailedException("Cannot build unikraft image")
 
+
 def build_mirage_docker_image(ip_addrs, operator, github_token):
     client = docker.DockerClient()
 
@@ -299,6 +397,7 @@ def build_mirage_docker_image(ip_addrs, operator, github_token):
     # launcher.label_unikernel_image('bdspro', image_name, 'unikraft', operator, , control_port,
     #                                source_address, source_port, sink_address, sink_port)
     return image_name
+
 
 def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -> str:
     image_name = message.image_name
@@ -341,11 +440,23 @@ def ensure_image_exists(context: TestContext, message: StartExperimentMessage) -
             latest_image_name = build_mirage_docker_image(ip_addrs, operator, github_token)
         else:
             latest_image_name = build_unikraft_docker_image(context, latest_image_name, control_port, control_address,
-                                                   source_port, source_address,
-                                                   sink_port,
-                                                   sink_address,
-                                                   operator, github_token)
+                                                            source_port, source_address,
+                                                            sink_port,
+                                                            sink_address,
+                                                            operator, github_token)
     else:
         latest_image_name = image.name
 
     return latest_image_name
+
+
+def ready_for_restart(source_or_sink):
+    global active_test_context
+    if active_test_context is not None:
+        if source_or_sink == "source":
+            active_test_context.source_waits_for_restart = True
+        if source_or_sink == "sink":
+            active_test_context.sink_waits_for_restart = True
+
+    if active_test_context.source_waits_for_restart and active_test_context.sink_waits_for_restart:
+        active_test_context.stop_event.set()

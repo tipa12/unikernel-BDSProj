@@ -10,6 +10,11 @@ START_EXPERIMENT = "START_EXPERIMENT"
 
 START_EXPERIMENT = "START_EXPERIMENT"
 
+READY_FOR_RESTART = "READY_FOR_RESTART"
+RESTART_EXPERIMENT = "RESTART_EXPERIMENT"
+
+START_EXPERIMENT = "START_EXPERIMENT"
+
 START_THROUGHPUT = "START_THROUGHPUT"
 
 RESPONSE_MEASUREMENTS = "RESPONSE_MEASUREMENTS"
@@ -92,9 +97,45 @@ class StartExperimentMessage:
         self.iterations = int(data['iterations'])
         self.delay = float(data['delay'])
         self.ramp_factor = float(data['ramp_factor'])
+        self.sample_rate = int(data['sample_rate'])
+        self.restarts = int(data['restarts'])
 
     def __str__(self) -> str:
         as_str = "StartExperimentMessage\n"
+        for k, v in vars(self).items():
+            as_str += f"\t{k}: {v}\n"
+        return as_str
+
+
+class ReadyForRestartMessage:
+    @staticmethod
+    def is_of_type(message):
+        return get_service_type(message) == READY_FOR_RESTART
+
+    def __init__(self, message) -> None:
+        super().__init__()
+        assert get_service_type(message) == READY_FOR_RESTART
+        data = get_data(message)
+        self.source_or_sink = data['source_or_sink']
+
+    def __str__(self) -> str:
+        as_str = "ReadyForRestartMessage\n"
+        for k, v in vars(self).items():
+            as_str += f"\t{k}: {v}\n"
+        return as_str
+
+
+class RestartMessage:
+    @staticmethod
+    def is_of_type(message):
+        return get_service_type(message) == RESTART_EXPERIMENT
+
+    def __init__(self, message) -> None:
+        super().__init__()
+        assert get_service_type(message) == RESTART_EXPERIMENT
+
+    def __str__(self) -> str:
+        as_str = "RestartMessage\n"
         for k, v in vars(self).items():
             as_str += f"\t{k}: {v}\n"
         return as_str
@@ -130,6 +171,8 @@ class ThroughputStartMessage:
         self.delay = float(data['delay'])
         self.ramp_factor = float(data['ramp_factor'])
         self.test_id = data['test_id']
+        self.sample_rate = int(data['sample_rate'])
+        self.restarts = int(data['restarts'])
 
     def __str__(self) -> str:
         as_str = "ThroughputStartMessage\n"
@@ -141,7 +184,7 @@ class ThroughputStartMessage:
 def start_experiment(control_port: int, control_address: str, sink_port: int, sink_address: str, source_port: int,
                      source_address: str, operator: str, github_token: str, image_name: str, iterations: int,
                      delay: float, ramp_factor: float, test_id: str, dataset_id: str, evaluation_id: str,
-                     force_rebuild: bool):
+                     force_rebuild: bool, sample_rate: int, restarts: int):
     data = {
         'force_rebuild': force_rebuild,
         'control_port': control_port,
@@ -158,18 +201,31 @@ def start_experiment(control_port: int, control_address: str, sink_port: int, si
         'evaluation_id': evaluation_id,
         'iterations': iterations,
         'delay': delay,
-        'ramp_factor': ramp_factor
+        'ramp_factor': ramp_factor,
+        'sample_rate': sample_rate,
+        'restarts': restarts,
     }
     send_message(CONTROL_TOPIC, data, START_EXPERIMENT)
 
 
-def throughput_start(test_id: str, iterations: int, delay: float, ramp_factor: float, dataset_id: str):
+def ready_for_restart(source_or_sink: str):
+    send_message(CONTROL_TOPIC, {'source_or_sink': source_or_sink}, READY_FOR_RESTART)
+
+
+def restart_experiment():
+    send_message(SOURCE_SINK_TOPIC, {}, RESTART_EXPERIMENT)
+
+
+def throughput_start(test_id: str, iterations: int, delay: float, ramp_factor: float, dataset_id: str,
+                     sample_rate: float, restarts: int):
     data = {
         'dataset_id': dataset_id,
         'iterations': iterations,
         'delay': delay,
         'ramp_factor': ramp_factor,
         'test_id': test_id,
+        'sample_rate': sample_rate,
+        'restarts': restarts,
     }
     send_message(SOURCE_SINK_TOPIC, data, START_THROUGHPUT)
 

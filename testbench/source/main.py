@@ -6,7 +6,7 @@ from google.cloud import pubsub_v1
 
 from testbench.common.LoggingFunctions import create_logger
 import SendData as sd
-from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_source
+from testbench.common.messages import ThroughputStartMessage, AbortExperimentMessage, subscribe_source, RestartMessage
 
 logger = create_logger('source')
 
@@ -18,6 +18,8 @@ def callback(message):
         start_throughput_message = ThroughputStartMessage(message)
         logger.info(f"Start Throughput Message: {start_throughput_message}")
         sd.send_data(start_throughput_message, logger)
+    elif RestartMessage.is_of_type(message):
+        sd.restart_current_experiment(logger)
     elif AbortExperimentMessage.is_of_type(message):
         sd.abort_current_experiment(logger)
     else:

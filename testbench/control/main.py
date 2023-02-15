@@ -5,7 +5,8 @@ import ControlFunctions as cc
 import testbench.common.LoggingFunctions as log
 # create Logger
 from testbench.common.messages import subscribe_control, AbortExperimentMessage, StartExperimentMessage, \
-    ResponseMeasurementsMessage
+    ResponseMeasurementsMessage, ReadyForRestartMessage
+
 logger = log.create_logger("control")
 
 
@@ -29,6 +30,8 @@ def callback(message):
     elif AbortExperimentMessage.is_of_type(message):
         logger.warning(f"Abort Message")
         cc.abort_current_experiment(logger)
+    elif ReadyForRestartMessage.is_of_type(message):
+        cc.ready_for_restart(ReadyForRestartMessage(message).source_or_sink)
     else:
         service_type = message.attributes['serviceType']
         logger.error('Unknown serviceType: {}'.format(service_type))
