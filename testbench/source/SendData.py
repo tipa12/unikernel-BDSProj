@@ -120,32 +120,97 @@ def backpressure_adjustment(context: TestContext, client_socket: socket.socket):
     client_socket.setblocking(False)
 
 
-def handle_client(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
-                  ramp_factor: float, packet_length=1):
+def wait_for_start_message(context: TestContext, client_socket: socket.socket):
+    start_message = client_socket.recv(len("SEND TUPLES!"))
+    assert start_message == b"SEND TUPLES!"
+    client_socket.setblocking(False)
+    context.current_measurement.start_timestamp = time.perf_counter()
+    context.last_time_stamp = context.current_measurement.start_timestamp
+
+
+def write_non_blocking(context: TestContext, client_socket: socket.socket, data: bytes):
+    # use downtime to log TPS
+    repeat_if_blocking_delay = 0.000001
+    counter = 0
+    while True:
+        try:
+            client_socket.send(data)
+            break
+        except BlockingIOError as e:
+            if counter == 0:
+                timme_delta = context.last_time_stamp
+                context.last_time_stamp = time.perf_counter()
+                timme_delta = context.last_time_stamp - timme_delta
+
+                tuples_send_in_delta = context.current_measurement.number_of_tuples_sent - context.number_of_tuples_sent_before_last_delta
+                context.number_of_tuples_sent_before_last_delta = context.current_measurement.number_of_tuples_sent
+
+                context.logger.info(f"TPS: {tuples_send_in_delta / timme_delta} over the last {timme_delta}s")
+                context.logger.info(
+                    f"{100 * context.current_measurement.number_of_tuples_sent / context.total_number_of_tuples}% done")
+
+            if context.stop_event.is_set():
+                raise ExperimentAbortedException()
+
+            time.sleep(repeat_if_blocking_delay)
+            counter += 1
+            if counter < 20:
+                repeat_if_blocking_delay *= 2
+            if counter == 20:
+                context.logger.info(f"Current {context.current_measurement.number_of_tuples_sent}")
+                backpressure_adjustment(context, client_socket)
+            if counter > 20:
+                context.logger.warning(f"Blocking {counter}")
+
+
+def handle_client_json(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
+                       ramp_factor: float, packet_length=1):
+    context.total_number_of_tuples = len(data) * scale
+    context.number_of_tuples_sent_before_last_delta = 0
+    context.number_of_tuples_sent = 0
+
+    wait_for_start_message(context, client_socket)
+    date_set_len = len(data)
+
+    for iteration in range(scale):
+        context.logger.info(f"Iteration: {iteration}")
+        for i in range(0, date_set_len):
+            tuple_data = b'{"a": %d,"b": %d,"c": %d,"d": %d,"e": %d}' % (
+                data[i][0], context.number_of_tuples_sent, data[i][2], data[i][3],
+                data[i][4])
+
+            write_non_blocking(context, client_socket, tuple_data)
+
+            context.number_of_tuples_sent += packet_length
+
+            if data[i][0]:
+                if context.current_measurement.number_of_tuples_passing_the_filter % context.sample_rate == 0:
+                    context.current_measurement.tuple_timestamps.append(time.perf_counter())
+                context.current_measurement.number_of_tuples_passing_the_filter += 1
+
+
+def handle_client_binary(client_socket: socket.socket, context: TestContext, data, delay: float, scale: int,
+                         ramp_factor: float, packet_length=1):
     if len(data) % packet_length != 0:
         context.logger.warning("Size of dataset is not divisible by packet length, dataset will be truncated")
         data = data[:(len(data) // packet_length) * packet_length]
 
     struct_string = f"!{5 * packet_length}i"
 
-    number_of_tuples = 0
-    total = len(data) * scale
+    context.total_number_of_tuples = len(data) * scale
+    context.number_of_tuples_sent_before_last_delta = 0
+    context.number_of_tuples_sent = 0
 
-    start_message = client_socket.recv(len("SEND TUPLES!"))
-    assert start_message == b"SEND TUPLES!"
-    client_socket.setblocking(False)
-    context.first_tuple_timestamp = time.perf_counter()
-    time_stamp = time.perf_counter()
+    wait_for_start_message(context, client_socket)
+    date_set_len = len(data)
 
     for _ in range(scale):
-        for i in range(0, len(data), packet_length):
+        for i in range(0, date_set_len, packet_length):
 
-            passing = [(data[i + pi][0] > 0, context.current_measurement.number_of_tuples_sent + pi) for pi in
-                       range(packet_length)]
+            passing = [(data[i + pi][0] > 0, context.number_of_tuples_sent + pi) for pi in range(packet_length)]
 
             data_tuple = [
-                [data[i + pi][0], context.current_measurement.number_of_tuples_sent + pi, data[i + pi][2],
-                 data[i + pi][3], data[i + pi][4]]
+                [data[i + pi][0], context.number_of_tuples_sent + pi, data[i + pi][2], data[i + pi][3], data[i + pi][4]]
                 for pi in range(packet_length)]
 
             packet = [item for sub_list in data_tuple for item in sub_list]
@@ -153,38 +218,9 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
             # pack the values into a byte string
             packed_data = struct.pack(struct_string, *packet)
 
-            # Non-Blocking send
-            # use downtime to log TPS
-            repeat_if_blocking_delay = 0.000001
-            counter = 0
-            while True:
-                try:
-                    client_socket.send(packed_data)
-                    break
-                except BlockingIOError as e:
-                    if counter == 0:
-                        delta = time_stamp
-                        time_stamp = time.perf_counter()
-                        delta = time_stamp - delta
-                        tuples_send_in_delta = context.current_measurement.number_of_tuples_sent - number_of_tuples
-                        number_of_tuples = context.current_measurement.number_of_tuples_sent
-                        context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s")
-                        context.logger.info(f"{100 * context.current_measurement.number_of_tuples_sent / total}% done")
+            write_non_blocking(context, client_socket, packed_data)
 
-                    if context.stop_event.is_set():
-                        raise ExperimentAbortedException()
-
-                    time.sleep(repeat_if_blocking_delay)
-                    counter += 1
-                    if counter < 20:
-                        repeat_if_blocking_delay *= 2
-                    if counter == 20:
-                        context.logger.info(f"Current {context.current_measurement.number_of_tuples_sent}")
-                        backpressure_adjustment(context, client_socket)
-                    if counter > 20:
-                        context.logger.warning(f"Blocking {counter}")
-
-            context.current_measurement.number_of_tuples_sent += packet_length
+            context.number_of_tuples_sent += packet_length
 
             for p in passing:
                 if p[0]:
@@ -194,20 +230,20 @@ def handle_client(client_socket: socket.socket, context: TestContext, data, dela
                     context.current_measurement.number_of_tuples_passing_the_filter += 1
 
             # Decrease the delay time - comment out to send data at a constant rate
-            # delay *= 1 / ramp_factor
+            delay *= 1 / ramp_factor
 
             if context.stop_event.is_set():
                 raise ExperimentAbortedException()
 
-            # if delay < 0.0001:
-            #     continue
+            if delay < 0.0001:
+                continue
 
-            # time.sleep(delay)
+            time.sleep(delay)
 
     close_connection(context, client_socket)
 
 
-def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, socket_opts=False):
+def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor, tuple_format: str, socket_opts=False):
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -258,7 +294,10 @@ def test_tuple_throughput(context: TestContext, data, delay, scale, ramp_factor,
 
             context.current_measurement.initial_packet_stats = PacketStats()
             # Handle the client's request
-            handle_client(client_socket, context, data, delay, scale, ramp_factor)
+            if tuple_format == 'json':
+                handle_client_json(client_socket, context, data, delay, scale, ramp_factor)
+            else:
+                handle_client_binary(client_socket, context, data, delay, scale, ramp_factor)
             break
 
     server_socket.close()
@@ -278,7 +317,7 @@ def wait_for_restart(context: TestContext):
     context.restart()
 
 
-def test_gcp(test_id: str, restarts, sample_rate, data, delay, iterations, logger, ramp_factor=1.05):
+def test_gcp(test_id: str, restarts, sample_rate, data, delay, iterations, logger, tuple_format: str, ramp_factor=1.05):
     global active_test_context
 
     if active_test_context is not None:
@@ -291,7 +330,7 @@ def test_gcp(test_id: str, restarts, sample_rate, data, delay, iterations, logge
             if number_of_restarts > 0:
                 wait_for_restart(active_test_context)
 
-            test_tuple_throughput(active_test_context, data, delay, iterations, ramp_factor)
+            test_tuple_throughput(active_test_context, data, delay, iterations, ramp_factor, tuple_format)
 
             active_test_context.current_measurement.final_packet_stats = PacketStats()
 
@@ -335,4 +374,5 @@ def restart_current_experiment(logger: logging.Logger):
 def send_data(message: ThroughputStartMessage, logger):
     data = gcs.downloadDataset(message.dataset_id)
 
-    test_gcp(message.test_id, message.restarts, message.sample_rate, data, message.delay, message.iterations, logger)
+    test_gcp(message.test_id, message.restarts, message.sample_rate, data, message.delay, message.iterations, logger,
+             message.tuple_format)
