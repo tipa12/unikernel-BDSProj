@@ -165,8 +165,8 @@ def handle_client_json(client_socket: socket.socket, context: TestContext, data,
     for iteration in range(scale):
         context.logger.info(f"Iteration: {iteration}")
         for i in range(0, date_set_len):
-            tuple_data = b'{"a": %d,"b": %d,"c": %d,"d": %d,"e": %d}' % (
-                data[i][0], context.current_measurement.number_of_tuples_sent, data[i][2], data[i][3],
+            tuple_data = b'{"a": %d,"b": %d,"c": %d,"d": %d,"e": %d, "f": %d}' % (
+                data[i][0], context.current_measurement.number_of_tuples_sent, time.perf_counter(), data[i][2], data[i][3],
                 data[i][4])
 
             write_non_blocking(context, client_socket, tuple_data)

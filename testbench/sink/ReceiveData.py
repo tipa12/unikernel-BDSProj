@@ -31,6 +31,7 @@ class Measurements:
         self.final_packet_stats: PacketStats | None = None
         self.diff_packet_stats: PacketStats | None = None
 
+        self.tuples_source_timestamps = []
         self.tuples_processing_timestamps = []
         self.tuples_received_timestamps = []
         self.number_of_tuples_recv = 0
@@ -41,6 +42,7 @@ class Measurements:
             "start_unix_timestamp": time.mktime(self.start_datetime.timetuple()),
             "done_timestamp": self.done_timestamp,
             "tuples_received_timestamps": self.tuples_received_timestamps,
+            "tuples_source_timestamps": self.tuples_source_timestamps,
             "tuples_processing_timestamps": self.tuples_processing_timestamps,
             "number_of_tuples_recv": self.number_of_tuples_recv,
             "packets": vars(self.diff_packet_stats),
@@ -151,13 +153,14 @@ def handle_client_receiver_json(client_socket: socket.socket, context: TestConte
             try:
                 received_tuple, json_len = dec.raw_decode(data[pos:])
                 pos += json_len
-                valid = all(k in received_tuple for k in ("a", "b", "c", "d", "e", "ts"))
+                valid = all(k in received_tuple for k in ("a", "b", "c", "d", "e", "f"))
                 if not valid:
                     context.logger.error(f"Invalid tuple: {received_tuple}")
 
                 if context.current_measurement.number_of_tuples_recv % context.sample_rate == 0:
                     context.current_measurement.tuples_received_timestamps.append(time.perf_counter())
-                    context.current_measurement.tuples_processing_timestamps.append(received_tuple['ts'])
+                    context.current_measurement.tuples_source_timestamps.append(received_tuple['c'])
+                    context.current_measurement.tuples_processing_timestamps.append(received_tuple['f'])
 
                 context.current_measurement.number_of_tuples_recv += 1
             except json.decoder.JSONDecodeError as e:
