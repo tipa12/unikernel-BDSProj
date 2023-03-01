@@ -290,6 +290,7 @@ def receive_data(message: ThroughputStartMessage, logger):
 
             number_of_restarts += 1
 
+        active_test_context.restart()
         active_test_context.error_or_aborted = False
         gcs.store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'sink', message.test_id)
 

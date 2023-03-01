@@ -173,7 +173,7 @@ def handle_client_json(client_socket: socket.socket, context: TestContext, data,
 
             context.current_measurement.number_of_tuples_sent += packet_length
 
-            if data[i][0]:
+            if data[i][0] > 0:
                 if context.current_measurement.number_of_tuples_passing_the_filter % context.sample_rate == 0:
                     context.current_measurement.tuple_timestamps.append(time.perf_counter())
                 context.current_measurement.number_of_tuples_passing_the_filter += 1
@@ -343,6 +343,7 @@ def test_gcp(test_id: str, restarts, sample_rate, data, delay, iterations, logge
 
             number_of_restarts += 1
 
+        active_test_context.restart()
         active_test_context.error_or_aborted = False
         gcs.store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'source', test_id)
 
