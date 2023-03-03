@@ -1,4 +1,5 @@
 import gc
+import json
 import logging
 import select
 import socket
@@ -9,8 +10,9 @@ from datetime import datetime
 from typing import Union
 
 import testbench.common.CustomGoogleCloudStorage as gcs
-from testbench.common.experiment import ExperimentAbortedException, ExperimentAlreadyRunningException
-from testbench.common.messages import ThroughputStartMessage, response_measurements, ready_for_restart
+from testbench.common.experiment import ExperimentAbortedException, ExperimentAlreadyRunningException, \
+    ExperimentFailedException
+from testbench.common.messages import ThroughputStartMessage, response_measurements, ready_for_restart, abort_experiment
 from testbench.common.stats import PacketStats, diff
 
 PORT = 8081
@@ -29,6 +31,8 @@ class Measurements:
         self.final_packet_stats: PacketStats | None = None
         self.diff_packet_stats: PacketStats | None = None
 
+        self.tuples_source_timestamps = []
+        self.tuples_processing_timestamps = []
         self.tuples_received_timestamps = []
         self.number_of_tuples_recv = 0
 
@@ -38,6 +42,8 @@ class Measurements:
             "start_unix_timestamp": time.mktime(self.start_datetime.timetuple()),
             "done_timestamp": self.done_timestamp,
             "tuples_received_timestamps": self.tuples_received_timestamps,
+            "tuples_source_timestamps": self.tuples_source_timestamps,
+            "tuples_processing_timestamps": self.tuples_processing_timestamps,
             "number_of_tuples_recv": self.number_of_tuples_recv,
             "packets": vars(self.diff_packet_stats),
         }
@@ -77,42 +83,107 @@ MAX_RECV_BUFFER_SIZE_IN_BYTES = 4096
 TUPLE_SIZE_IN_BYTES = 20
 
 
-def handle_client_receiver(client_socket: socket.socket, context: TestContext, scale: int):
-    client_socket.setblocking(False)
+def receive_non_blocking(context: TestContext, client_socket: socket.socket):
+    repeat_if_blocking_delay = 0.000001
+    counter = 0
+
+    while True:
+        try:
+            data = client_socket.recv(TUPLE_SIZE_IN_BYTES * 100)
+            break
+        except socket.timeout as e:
+            if context.stop_event.is_set():
+                raise ExperimentAbortedException()
+
+            time_delta = context.last_time_stamp
+            current = time.perf_counter()
+            time_delta = current - time_delta
+
+            if counter == 0 and time_delta > 5:
+                context.last_time_stamp = current
+
+                tuples_send_in_delta = context.current_measurement.number_of_tuples_recv - context.number_of_tuples_sent_before_last_delta
+                context.number_of_tuples_sent_before_last_delta = context.current_measurement.number_of_tuples_recv
+                context.logger.info(f"TPS: {tuples_send_in_delta / time_delta} over the last {time_delta}s\n")
+
+            if counter > 30:
+                context.logger.info("Receive timeout")
+                data = []
+                break
+
+            counter += 1
+            time.sleep(repeat_if_blocking_delay)
+            repeat_if_blocking_delay *= 2
+    return data
+
+
+def handle_client_receiver_json(client_socket: socket.socket, context: TestContext, scale: int):
+    client_socket.settimeout(0.1)
     time_stamp = time.perf_counter()
-    number_of_tuples = 0
+
+    context.last_time_stamp = time_stamp
+    context.number_of_tuples_sent_before_last_delta = 0
+
+    is_done = False
+    overflow = ''
+
+    while not is_done:
+        if context.stop_event.is_set():
+            raise ExperimentAbortedException()
+
+        data = receive_non_blocking(context, client_socket)
+
+        if len(data) == 0:
+            break
+
+        if len(overflow) > 0:
+            data = overflow + data.decode('utf-8')
+        else:
+            data = data.decode('utf-8')
+
+        dec = json.JSONDecoder()
+        pos = 0
+        while not pos == len(data):
+            if data[pos:].startswith("DONE"):
+                context.current_measurement.done_timestamp = time.perf_counter()
+                client_socket.send(b"ACK")
+                is_done = True
+                break
+
+            try:
+                received_tuple, json_len = dec.raw_decode(data[pos:])
+                pos += json_len
+                valid = all(k in received_tuple for k in ("a", "b", "c", "d", "e", "f"))
+                if not valid:
+                    context.logger.error(f"Invalid tuple: {received_tuple}")
+
+                if context.current_measurement.number_of_tuples_recv % context.sample_rate == 0:
+                    context.current_measurement.tuples_received_timestamps.append(time.perf_counter())
+                    context.current_measurement.tuples_source_timestamps.append(received_tuple['c'])
+                    context.current_measurement.tuples_processing_timestamps.append(received_tuple['f'])
+
+                context.current_measurement.number_of_tuples_recv += 1
+            except json.decoder.JSONDecodeError as e:
+                overflow = data[pos:]
+                break
+
+            if pos == len(data):
+                overflow = ''
+
+    context.logger.info("Receiving Done!")
+
+
+def handle_client_receiver_binary(client_socket: socket.socket, context: TestContext, scale: int):
+    client_socket.settimeout(0.1)
+    time_stamp = time.perf_counter()
+    context.last_time_stamp = time_stamp
+    context.number_of_tuples_sent_before_last_delta = 0
     is_done = False
     while not is_done:
         if context.stop_event.is_set():
             raise ExperimentAbortedException()
 
-        repeat_if_blocking_delay = 0.000001
-        counter = 0
-        while True:
-            try:
-                data = client_socket.recv(TUPLE_SIZE_IN_BYTES * 100)
-                break
-            except BlockingIOError as e:
-                if context.stop_event.is_set():
-                    raise ExperimentAbortedException()
-
-                delta = time_stamp
-                current = time.perf_counter()
-                delta = current - delta
-                if counter == 0 and delta > 5:
-                    time_stamp = current
-                    tuples_send_in_delta = context.current_measurement.number_of_tuples_recv - number_of_tuples
-                    number_of_tuples = context.current_measurement.number_of_tuples_recv
-                    context.logger.info(f"TPS: {tuples_send_in_delta / delta} over the last {delta}s\n")
-
-                if counter > 30:
-                    context.logger.info("Receive timeout")
-                    data = []
-                    break
-
-                counter += 1
-                time.sleep(repeat_if_blocking_delay)
-                repeat_if_blocking_delay *= 2
+        data = receive_non_blocking(context, client_socket)
 
         if len(data) == 0:
             break
@@ -134,11 +205,11 @@ def handle_client_receiver(client_socket: socket.socket, context: TestContext, s
     context.logger.info("Receiving Done!")
 
 
-def test_tuple_throughput_receiver(context: TestContext, scale):
+def test_tuple_throughput_receiver(context: TestContext, scale, tuple_format: str):
     # Create a TCP socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.setblocking(False)
+    server_socket.settimeout(0.1)
     context.sink_socket = server_socket
 
     # Bind the socket to a local address and port
@@ -172,8 +243,11 @@ def test_tuple_throughput_receiver(context: TestContext, scale):
 
             context.current_measurement.initial_packet_stats = PacketStats()
             try:
-                # Handle the client's request
-                handle_client_receiver(client_socket, context, scale)
+                if tuple_format == 'json':
+                    # Handle the client's request
+                    handle_client_receiver_json(client_socket, context, scale)
+                else:
+                    handle_client_receiver_binary(client_socket, context, scale)
                 break
             finally:
                 client_socket.close()
@@ -207,7 +281,7 @@ def receive_data(message: ThroughputStartMessage, logger):
             if number_of_restarts > 0:
                 wait_for_restart(active_test_context)
 
-            test_tuple_throughput_receiver(active_test_context, scale=message.iterations)
+            test_tuple_throughput_receiver(active_test_context, message.iterations, message.tuple_format)
             active_test_context.current_measurement.final_packet_stats = PacketStats()
 
             active_test_context.current_measurement.diff_packet_stats = \
@@ -216,11 +290,15 @@ def receive_data(message: ThroughputStartMessage, logger):
 
             number_of_restarts += 1
 
-        active_test_context.abort_or_error = False
+        active_test_context.restart()
+        active_test_context.error_or_aborted = False
         gcs.store_evaluation_in_bucket(logger, active_test_context.get_measurements(), 'sink', message.test_id)
 
         response_measurements('sink', {})
 
+    except ExperimentFailedException:
+        active_test_context.error_or_aborted = True
+        abort_experiment()
     except ExperimentAbortedException as _:
         active_test_context.logger.info("Experiment was aborted")
     finally:

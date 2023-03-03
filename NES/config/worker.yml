@@ -1,29 +1,29 @@
 ###
 ### General configuration
 ###
-# logLevel: LOG_ERROR
+logLevel: LOG_ERROR
 #logLevel: LOG_TRACE
-logLevel: LOG_DEBUG
+#logLevel: LOG_DEBUG
 
 ###
 ### Network configuration
 ###
-localWorkerIp: 10.142.0.34
+localWorkerIp: 10.150.0.34
 coordinatorIp: 10.142.0.32
 
 ###
 ### Physical source configuration
 ###
 physicalSources:
-        - logicalSourceName: wind_turbines_mqtt
-          physicalSourceName: wind_turbine_2
-          type: MQTTSource
-          configuration:
-                topic: /wind_turbines
-                cleanSession: true
-                clientId: rfRqLGZRChg8eS30PEeR
-                flushIntervalMS: 300
-                inputFormat: JSON
-                url: "ws://10.142.0.36:9001"
-                qos: 2
-                userName: rfRqLGZRChg8eS30PEeR
+  - logicalSourceName: input_tuple
+    physicalSourceName: tcp_source
+    type: TCPSource
+    configuration:
+      socketHost: 10.142.0.36
+      socketPort: 8081
+      socketDomain: AF_INET
+      socketType: SOCK_STREAM
+      flushIntervalMS: 1
+      inputFormat: JSON
+      decideMessageSize: TUPLE_SEPARATOR
+      tupleSeparator: '|'

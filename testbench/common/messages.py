@@ -99,6 +99,7 @@ class StartExperimentMessage:
         self.ramp_factor = float(data['ramp_factor'])
         self.sample_rate = int(data['sample_rate'])
         self.restarts = int(data['restarts'])
+        self.tuple_format = data['tuple_format']
 
     def __str__(self) -> str:
         as_str = "StartExperimentMessage\n"
@@ -173,6 +174,7 @@ class ThroughputStartMessage:
         self.test_id = data['test_id']
         self.sample_rate = int(data['sample_rate'])
         self.restarts = int(data['restarts'])
+        self.tuple_format = data['tuple_format']
 
     def __str__(self) -> str:
         as_str = "ThroughputStartMessage\n"
@@ -184,7 +186,7 @@ class ThroughputStartMessage:
 def start_experiment(control_port: int, control_address: str, sink_port: int, sink_address: str, source_port: int,
                      source_address: str, operator: str, github_token: str, image_name: str, iterations: int,
                      delay: float, ramp_factor: float, test_id: str, dataset_id: str, evaluation_id: str,
-                     force_rebuild: bool, sample_rate: int, restarts: int):
+                     force_rebuild: bool, sample_rate: int, restarts: int, tuple_format: str):
     data = {
         'force_rebuild': force_rebuild,
         'control_port': control_port,
@@ -204,6 +206,7 @@ def start_experiment(control_port: int, control_address: str, sink_port: int, si
         'ramp_factor': ramp_factor,
         'sample_rate': sample_rate,
         'restarts': restarts,
+        'tuple_format': tuple_format,
     }
     send_message(CONTROL_TOPIC, data, START_EXPERIMENT)
 
@@ -217,7 +220,7 @@ def restart_experiment():
 
 
 def throughput_start(test_id: str, iterations: int, delay: float, ramp_factor: float, dataset_id: str,
-                     sample_rate: float, restarts: int):
+                     sample_rate: float, restarts: int, tuple_format: str):
     data = {
         'dataset_id': dataset_id,
         'iterations': iterations,
@@ -226,6 +229,7 @@ def throughput_start(test_id: str, iterations: int, delay: float, ramp_factor: f
         'test_id': test_id,
         'sample_rate': sample_rate,
         'restarts': restarts,
+        'tuple_format': tuple_format,
     }
     send_message(SOURCE_SINK_TOPIC, data, START_THROUGHPUT)
 

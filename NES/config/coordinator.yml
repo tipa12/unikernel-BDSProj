@@ -2,10 +2,10 @@
 ### General configuration
 ###
 # logLevel: LOG_ERROR
-logLevel: LOG_WARNING
-# logLevel: LOG_DEBUG
+#logLevel: LOG_WARNING
+logLevel: LOG_DEBUG
 optimizer:
-        distributedWindowChildThreshold: 3
+  distributedWindowChildThreshold: 3
 
 ###
 ### Network configuration
@@ -18,28 +18,19 @@ restPort: 80
 ### Logical source configuration
 ###
 logicalSources:
-        - logicalSourceName: "wind_turbines_mqtt"
-          fields:
-              - name: a
-                type: INT32
-              - name: b
-                type: INT32
-              - name: c
-                type: INT32
-              - name: d
-                type: INT32
-              - name: e
-                type: INT32
-        - logicalSourceName: "wind_turbines_csv"
-          fields:
-              - name: a
-                type: INT32
-              - name: b
-                type: INT32
-              - name: c
-                type: INT32
-              - name: d
-                type: INT32
-              - name: e
-                type: INT32      
+  - logicalSourceName: "input_tuple"
+    fields:
+      - name: a
+        type: INT64
+      - name: b
+        type: INT64
+      - name: c
+        type: INT64
+      - name: d
+        type: INT64
+      - name: e
+        type: INT64
+      - name: f
+        type: INT64
+
               

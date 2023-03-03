@@ -1,0 +1,5 @@
+$(eval $(call addlib,apptestoperator))
+
+APPTESTOPERATOR_SRCS-y += $(APPTESTOPERATOR_BASE)/src/main.c
+APPTESTOPERATOR_SRCS-y += $(APPTESTOPERATOR_BASE)/src/tuple.c
+APPTESTOPERATOR_SRCS-y += $(APPTESTOPERATOR_BASE)/src/network.c

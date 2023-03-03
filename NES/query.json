@@ -1,0 +1,4 @@
+{
+  "userQuery": "Query::from(\"input_tuple\").filter(Attribute( \"f\") > 0).sink(FileSinkDescriptor::create(\"result.csv\", \"CSV_FORMAT\", \"APPEND\"));",
+  "placement": "BottomUp"
+}
