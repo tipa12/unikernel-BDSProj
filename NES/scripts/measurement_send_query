@@ -1,0 +1,71 @@
+#! /bin/bash
+query_starting_time=$(date +"%T")
+echo "Sending query $current_time"
+
+#Check if query arrived to coordinator
+step_ready="false"
+
+#STARTING STATUS start mosquitto otherwise the client can not start sending messages
+#STARTING STATUS start corrdinator otherwise we can not check when the quey is deploy
+#STARTING STATUS start measurement_hekc_query_status otherwise we can not capture the time when the query arrived
+#REMARK since que Worker is not runnig the coordinator send a error telling that there is no physical source
+
+# send a query 
+# Check if the query is runig, if that is not the case, restart the query againg until the query status change to running
+# if response is null, then the catalog in coordinator is empty
+
+#sending a query
+result=$(sudo curl -d@filter_a_bgt_300_sink_csv.json http://localhost:8081/v1/nes/query/execute-query)
+
+#Cheking for the status
+spected_result='{"queryId":'
+step_ready="false"
+query_id=""
+required_status="RUNNING"
+searchstring='"status":"'
+code_searchstring='"code": '
+error_code="400"
+current_status="NULL"
+
+
+get_status=${result#*:}
+get_status_1=${get_status%,*}
+get_status=${get_status_1%,*}
+get_code=${get_status_1#*:}
+
+
+if [[ "$get_status" == ' "ERROR"' && "$get_code" == ' 400' ]];then
+	echo "Coordinagtor waiting for PhyssicalSource"
+	step_ready="FALSE"
+else
+	echo "Other error............"
+	echo "This is the complete responde:$result"
+	echo "This from get status:$get_status"
+	echo "This is after cuting:$get_code"
+fi
+
+#check if the worker is startet other wise we get the error:
+#"Resource Not Found: Logical source test has no physical source defined
+
+while [ $step_ready == "FALSE" ]
+do
+	result=$(sudo curl -d@filter_a_bgt_300_sink_csv.json http://localhost:8081/v1/nes/query/execute-query)
+	
+	get_status=${result#*:}
+	get_status_1=${get_status%,*}
+	get_status=${get_status_1%,*}
+	get_code=${get_status_1#*:}
+	
+	if [[ "$get_status" == ' "ERROR"' && "$get_code" == ' 400' ]];then
+		echo "The Worker(Pysical-source) is not jet ready"
+		echo "This is the complete response fom the coordinator:$result"
+		echo "This is the status:$get_status"
+		echo "This is thecode :$get_code"
+		echo "sending the query againg..."
+	else
+		echo "The Query was accepted!"
+		echo "This is the reply from corrdinator: $result"
+		step_ready="TRUE"
+	fi 
+done
+

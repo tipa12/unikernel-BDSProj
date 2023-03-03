@@ -1,0 +1,83 @@
+#! /bin/bash
+query_starting_time=$(date +"%T")
+q_s_time_in_sec=${query_starting_time +%s}
+echo "Sending query $current_time"
+
+#Check if query arrived to coordinator
+#exapmple of APi-reply
+#searching_string='[{"queryId":5,"queryMetaData":"","queryPlan":"SINK(15: {FileSinkDescriptor()})\n  FILTER(14)\n    SOURCE(13,test,LogicalSourceDescriptor(test, ))\n","queryStatus":"DEPLOYED","queryString":"Query::from(\"test\").filter(Attribute(\"a\")>300).sink(FileSinkDescriptor::create(\"/tutorial/query-results/result_filter_a_bgt_100.csv\", \"CSV_FORMAT\",\"APPEND\"));"}]'
+
+step_ready="false"
+empty_catalog="null"
+
+#STARTING STATUS start mosquitto otherwise the client can not start sending messages
+#STARTING STATUS start corrdinator otherwise we can not check when the quey is deploy
+
+#TO-DO chekc if coordinator is running: NOT REALLY NESSASY
+
+# Check if the coordinator have some queries registered in catalog
+# if response is null, then the catalog in coordinator is empty
+# here we ask the coordinator to deliver the current status of the catatlog,
+# If the catalog is null, then we know no worker has been attached to process a query
+
+while [ $step_ready == "false" ]
+do
+	result=$(curl -X GET http://localhost:8081/v1/nes/queryCatalog/allRegisteredQueries -H 'cache-control: no-cache')
+	if [[ $result == $empty_catalog ]]
+	then
+		echo "The catalog is empty, waiting for a query to be processed"
+	else
+		echo "The coordinator-catalog has some queries reghisted now : $result"
+		catalog_notEmpy_time=$(date +"%T")
+		echo "Querry arrived at time : $catalog_notEmpy_time"
+		step_ready="true"		
+	fi
+done
+echo "starting time is: $query_starting_time"
+
+step_ready="false"
+
+
+#TO-DO get the query-id and capture the time how long it took for the query to change the status from REGISTER to RUNNING
+get_query_id=${result#*'"queryId":'}
+get_query_id=${get_query_id%',"queryMetaData"'*}
+
+get_query_status=${result#*'"queryStatus":"'}
+get_query_status=${get_query_status%'","queryString"'*}
+
+echo "id ...$get_query_id"
+echo "status  ...$get_query_status"
+
+#get_query_id=${get_query_id:0:1}
+
+#get_query_id=${get_query_id%,*} "status":"RUNNING"}
+
+while [ "$step_ready" == "false" ]
+do
+	status_reply=$(curl -X GET http://localhost:8081/v1/nes/query/query-status?queryId="$get_query_id" -H 'cache-control: no-cache')
+	
+		get_query_id=${status_reply#*'"queryId":'}
+		get_query_id=${get_query_id%',"queryMetaData"'*}
+
+		get_query_status=${status_reply#*'"status":"'}
+		get_query_status=${get_query_status%'"}'*}
+		
+	if [[ $get_query_status == "RUNNING" ]];then
+		query_status_eq_running_time=$(date +"%T")
+		echo "The query with id $get_query_id in now in status $get_query_status"
+		echo "The starting time, aking if the coordinator has some queries deployed, is: $query_starting_time and in sec $q_s_time_in_sec"
+		echo "Querry arrived at time : $catalog_notEmpy_time"
+		echo "The time it took to change from DEPLOYED TO RUNNING is: $query_status_eq_running_time"
+		step_ready="true"
+	else
+
+		echo "The current status is $get_query_status"
+	fi
+done
+
+#Starting client
+#echo "starting the client..."
+#client=$(python3 client_pub_with_timestamp.py) 
+#echo "the answer from clinet is $client"
+
+
